@@ -4,9 +4,6 @@ import io.github.torvehammok.dto.OCAgentStep
 import io.github.torvehammok.dto.StepFinishPart
 import io.github.torvehammok.dto.TextPart
 import io.github.torvehammok.dto.ToolPart
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.io.BufferedWriter
@@ -24,54 +21,6 @@ class PrintResponseTest {
     companion object {
         val jsonMapper = JsonMapperFactory.createJsonMapper()
     }
-
-    @Test
-    fun name() {
-        val prompt = """
-            You are slack bot helping developers. Your task is to provide helpful responses to user queries in a Slack channel. 
-            
-            You have access to the following tools:
-            - github through github cli
-            
-            Response:
-            - resulting message should be wrapped in <response> xml tags
-            
-            <user_message>
-            How do I create a new branch in git?
-            </user_message>
-        """.trimIndent()
-
-        val builder = ProcessBuilder(
-            "opencode",
-            "run",
-            "Hi, how are you doing?",
-        )
-
-        val process = builder
-            .redirectErrorStream(true)
-            .start()
-
-        val scope = CoroutineScope(CoroutineName("ProcessOutputLogger"))
-
-        process.outputStream.close()
-
-        scope.launch {
-            process.inputReader().useLines { lines ->
-                lines.forEach { line ->
-                    log.debug("[opencode]: {}", line)
-                }
-            }
-        }
-
-
-        Thread.sleep(5000)
-        val finished = process.waitFor(15.seconds.toJavaDuration())
-        if (!finished) {
-            log.warn("Process timed out after 15 seconds")
-            process.destroyForcibly()
-        }
-    }
-
 
     @Test
     fun nam2e() {

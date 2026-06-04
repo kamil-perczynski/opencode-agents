@@ -39,5 +39,5 @@ fun escapeXml(input: String): String {
     return input
         .replace("&", "&amp;")
         .replace("<", "&lt;")
-        .replace(">", "&gt;");
+        .replace(">", "&gt;")
 }

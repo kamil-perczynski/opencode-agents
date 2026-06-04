@@ -13,12 +13,10 @@ import java.io.BufferedWriter
 import java.io.OutputStreamWriter
 import java.math.BigDecimal
 import java.math.MathContext
-import java.time.Duration
 import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
-import kotlin.time.toKotlinDuration
 
 private val log = LoggerFactory.getLogger(OcAgent::class.java)
 

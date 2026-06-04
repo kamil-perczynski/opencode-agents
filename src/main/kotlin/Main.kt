@@ -1,26 +1,29 @@
 package io.github.torvehammok
 
 import com.slack.api.bolt.App
+import com.slack.api.bolt.context.builtin.EventContext
 import com.slack.api.bolt.socket_mode.SocketModeApp
 import com.slack.api.model.block.Blocks
-import com.slack.api.model.block.Blocks.context
-import com.slack.api.model.block.Blocks.divider
-import com.slack.api.model.block.Blocks.section
-import com.slack.api.model.block.composition.BlockCompositions.markdownText
-import com.slack.api.model.block.element.BlockElements.asContextElements
-import com.slack.api.model.event.AppMentionEvent
-import com.slack.api.model.event.MessageChangedEvent
-import com.slack.api.model.event.MessageDeletedEvent
-import com.slack.api.model.event.MessageEvent
+import com.slack.api.model.block.composition.MarkdownTextObject
+import com.slack.api.model.event.*
+import com.slack.api.model.view.View
 import io.github.cdimascio.dotenv.dotenv
-import okhttp3.Dispatcher
-import kotlin.text.Typography.section
+import io.github.torvehammok.io.github.torvehammok.OCThread
+import io.github.torvehammok.io.github.torvehammok.OCThreadMessage
+import io.github.torvehammok.io.github.torvehammok.OcAgentResponse
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 fun main() {
     dotenv {
         ignoreIfMissing = true
         systemProperties = true
     }
+
+    val ocAgent = OcAgent(
+        jsonMapper = JsonMapperFactory.createJsonMapper()
+    )
 
     val botToken = System.getProperty("SLACK_BOT_TOKEN")
         ?: throw IllegalStateException("SLACK_BOT_TOKEN environment variable is missing")
@@ -35,54 +38,37 @@ fun main() {
         ctx.ack()
     }
 
+    val scope = CoroutineScope(CoroutineName("Boo"))
 
     app.event(AppMentionEvent::class.java) { req, ctx ->
         println("Received an app mention event in channel ${req.event.channel} from user ${req.event.user}")
         val event = req.event
 
-        ctx.client().chatPostMessage {
-            it.channel(event.channel)
-                .threadTs(req.event.ts)
-                .text("")
-                .blocksAsString(
-                    """
-                    [
-                        {
-                          "type": "section",
-                          "text": {
-                            "type": "mrkdwn",
-                            "text": "Hey <@${req.event.user}>, I received your mention in this channel!"
-                          }
-                        },
-                        {
-                          "type": "divider"
-                        },
-                        {
-                          "type": "context",
-                          "elements": [
-                            {
-                              "type": "mrkdwn",
-                              "text": "_I am just a bot, I can make mistakes._"
-                            }
-                          ]
-                        }
-                      ]
-                """.trimIndent()
+        val threadTs = event.threadTs ?: event.ts
+        val userId = event.user
+        val channel = event.channel
+
+        scope.launch {
+            setAssistantThreadStatus(ctx, threadTs, req.event.channel)
+            val ocThread = readThread(ctx, threadTs, event.channel)
+            val ocResponse = ocAgent.run(ocThread)
+            postMessage(ctx, channel, threadTs, ocResponse)
+        }
+
+        ctx.ack()
+    }
+
+    app.event(AppHomeOpenedEvent::class.java) { req, ctx ->
+        println("Received an app home opened event from user ${req.event.user}")
+
+        ctx.client().viewsPublish {
+            it.userId(req.event.user)
+                .view(
+                    View.builder()
+                        .type("home")
+                        .build()
                 )
         }
-
-        // Print the whole thread conversation (if mention is in a thread, fetch from parent)
-        val threadTs = event.threadTs ?: event.ts
-        val threadResponse = ctx.client().conversationsReplies {
-            it.channel(event.channel)
-                .ts(threadTs)
-        }
-
-        println("Thread content (channel=${event.channel}, thread_ts=${threadTs}):")
-        threadResponse.messages?.forEach { msg ->
-            println("  [user=${msg.user}] ${msg.text}")
-        }
-
         ctx.ack()
     }
 
@@ -95,80 +81,20 @@ fun main() {
         val event = req.event
         println("Received a message event in channel ${event.channel} from user ${event.user}")
 
-        if (req.event.botId != null) {
+        if (isNotBot(event) || isNotTopLevelMessage(event)) {
             return@event ctx.ack()
         }
 
-        app.executorService().submit {
-            if (event.channelType == "im" && event.botId == null) {
-                println(event.text)
-                ctx.client().chatPostMessage {
-                    it.channel(event.channel) // "Dxxxxxx" - The unique DM channel ID between user and bot
-                        .threadTs(req.event.ts)
-                        .text("Hey <@${event.user}>, I received your direct message!")
-                }
-            } else {
-                // Filter: specific channel, plain messages only, ignore bot messages, ignore thread replies
-                val subtype = event.subtype
-                val channel = event.channel
-                val botId = event.botId
-                val user = event.user
-                val threadTs = event.threadTs
+        val threadTs = event.threadTs ?: event.ts
+        val channel = event.channel
 
-                if (subtype == null
-                    && channel == "C0B783F5CLW"
-                    && botId == null
-                    && user != ctx.botUserId
-                    && (threadTs == null || threadTs == event.ts)
-                ) {
-                    try {
-                        // 2a. Add a reaction to the incoming message
-                        val reactionsAdd = ctx.client().reactionsAdd {
-                            it.channel(event.channel)
-                                .timestamp(event.ts)
-                                .name("thinking_face")
-                        }
-
-                        val thinkingResponse = ctx.client().chatPostMessage {
-                            it.channel(event.channel)
-                                .text("Thinking... :hourglass_flowing_sand:")
-                                .threadTs(event.ts)
-                        }
-
-                        // 2c. Wait 3 seconds
-                        Thread.sleep(3000)
-
-                        // 2d. Update the thinking message with the actual response
-                        ctx.client().chatUpdate {
-                            it.channel(event.channel)
-                                .ts(thinkingResponse.ts)
-                                .text("Here's my response after 3 seconds of deep thought! :bulb:")
-                        }
-                        ctx.client().reactionsAdd {
-                            it.channel(event.channel)
-                                .timestamp(event.ts)
-                                .name("checkered_flag")
-                        }
-
-                        // 2e. Print the whole thread conversation (if message is in a thread, fetch from parent)
-                        val threadTs = event.threadTs ?: event.ts
-                        val threadResponse = ctx.client().conversationsReplies {
-                            it.channel(event.channel)
-                                .ts(threadTs)
-                        }
-
-                        println("Thread content (channel=${event.channel}, thread_ts=${threadTs}):")
-                        threadResponse.messages?.forEach { msg ->
-                            println("  [user=${msg.user}] ${msg.text}")
-                        }
-                    } catch (e: Exception) {
-                        ctx.logger.error("Error processing message in channel ${event.channel}", e)
-                    }
-                }
-
-                // Always ack to avoid the 3-second Slack timeout
-            }
+        scope.launch {
+            setAssistantThreadStatus(ctx, threadTs, req.event.channel)
+            val ocThread = readThread(ctx, threadTs, event.channel)
+            val ocResponse = ocAgent.run(ocThread)
+            postMessage(ctx, channel, threadTs, ocResponse)
         }
+
         ctx.ack()
     }
 
@@ -177,6 +103,7 @@ fun main() {
         println("Received /oc command from user ${req.payload.userId} in channel ${req.payload.channelId}")
         println("Command text: ${req.payload.text}")
         ctx.ack("Hello from /oc command! 👋")
+
     }
 
     // 4. Grab your Slack App Token (starts with xapp-)
@@ -188,4 +115,130 @@ fun main() {
 
     println("Starting Slack Bolt App in Socket Mode...")
     socketModeApp.start()
+}
+
+private fun postMessage(
+    ctx: EventContext,
+    channel: String?,
+    threadTs: String?,
+    ocResponse: OcAgentResponse
+) {
+    val text = ocResponse.response
+
+    val blocks = Blocks.asBlocks(
+        Blocks.section {
+            it.text(
+                MarkdownTextObject.builder()
+                    .text(text)
+                    .build()
+            )
+        },
+        Blocks.divider(),
+        Blocks.context {
+            it.elements(
+                listOf(
+                    MarkdownTextObject.builder()
+                        .text(
+                            """
+                          _Response generated in *${ocResponse.duration.inWholeSeconds}s*_
+                          _It took ${ocResponse.toolsInvocations} tool invocations, roughly $${ocResponse.cost.toPlainString()}_
+                          _I am just a bot, I can make mistakes._
+                        """.trimIndent()
+                        )
+                        .build(),
+                )
+            )
+        }
+    )
+
+    ctx.client().chatPostMessage {
+        it.channel(channel)
+            .threadTs(threadTs)
+            .text(text)
+            .blocks(blocks)
+    }
+
+
+    ctx.client().reactionsAdd {
+        it.channel(channel)
+            .timestamp(threadTs)
+            .name("checkered_flag")
+    }
+}
+
+private fun isNotTopLevelMessage(event: MessageEvent): Boolean = event.threadTs != null
+
+private fun isNotBot(event: MessageEvent): Boolean = event.botId != null
+
+private fun readThread(
+    ctx: EventContext,
+    threadTs: String,
+    channel: String
+): OCThread {
+    val threadResponse = ctx.client().conversationsReplies {
+        it.channel(channel)
+            .ts(threadTs)
+    }
+
+    return OCThread(
+        channelId = channel,
+        threadTs = threadTs,
+        messages = threadResponse.messages
+            ?.map { msg ->
+                OCThreadMessage(
+                    text = msg.text ?: "",
+                    ts = msg.ts ?: "",
+                    user = msg.user ?: "",
+                    isBot = msg.botId != null
+                )
+            }
+            ?: emptyList()
+    )
+}
+
+private fun toBlocksJson(userId: String): String {
+    return """
+        [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "Hey <@$userId>, I received your mention in this channel!"
+              }
+            },
+            {
+              "type": "divider"
+            },
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "_I am just a bot, I can make mistakes._"
+                }
+              ]
+            }
+          ]
+    """.trimIndent()
+}
+
+private suspend fun setAssistantThreadStatus(
+    ctx: EventContext,
+    threadTs: String?,
+    channel: String
+) {
+    ctx.client().reactionsAdd {
+        it.channel(channel)
+            .timestamp(threadTs)
+            .name("opencode")
+    }
+
+    ctx.client().assistantThreadsSetStatus {
+        it.channelId(channel)
+            .threadTs(threadTs)
+            .status("is thinking...")
+            .loadingMessages(
+                LoadingMessages.randomMessages()
+            )
+    }
 }

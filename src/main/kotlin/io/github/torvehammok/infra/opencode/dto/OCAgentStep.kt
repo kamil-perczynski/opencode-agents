@@ -1,4 +1,4 @@
-package io.github.torvehammok.dto
+package io.github.torvehammok.infra.opencode.dto
 
 import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties

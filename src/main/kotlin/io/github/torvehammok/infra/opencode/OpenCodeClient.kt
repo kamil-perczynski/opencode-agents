@@ -1,7 +1,7 @@
-package io.github.torvehammok
+package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.metrics.client.pathPattern
-import io.github.torvehammok.dto.OCMessage
+import io.github.torvehammok.infra.opencode.dto.OCMessage
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -9,6 +9,7 @@ import io.ktor.http.*
 import org.koin.core.annotation.Named
 import org.koin.core.annotation.Singleton
 import tools.jackson.databind.JsonNode
+import java.util.Base64
 
 @Singleton
 class OpenCodeClient(@Named("opencode") private val httpClient: HttpClient) {
@@ -65,7 +66,7 @@ class OpenCodeClient(@Named("opencode") private val httpClient: HttpClient) {
 fun javaBasicAuthHeader(username: String, password: String): String {
     val credentials = "$username:$password"
     // Encode the credentials string into a Base64 string
-    val encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.toByteArray(Charsets.UTF_8))
+    val encodedCredentials = Base64.getEncoder().encodeToString(credentials.toByteArray(Charsets.UTF_8))
 
     // Return the full header value
     return "Basic $encodedCredentials"

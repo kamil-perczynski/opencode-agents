@@ -1,6 +1,11 @@
 package io.github.torvehammok.dto
 
-import io.github.torvehammok.io.github.torvehammok.libs.JsonMapperFactory
+import io.github.torvehammok.infra.opencode.dto.OCAgentStep
+import io.github.torvehammok.infra.opencode.dto.StepFinishPart
+import io.github.torvehammok.infra.opencode.dto.StepStartPart
+import io.github.torvehammok.infra.opencode.dto.TextPart
+import io.github.torvehammok.infra.opencode.dto.ToolPart
+import io.github.torvehammok.libs.JsonMapperFactory
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

@@ -1,12 +1,11 @@
-package io.github.torvehammok.service
+package io.github.torvehammok.domain
 
 import com.slack.api.bolt.context.builtin.EventContext
 import com.slack.api.model.block.Blocks
 import com.slack.api.model.block.LayoutBlock
-import io.github.torvehammok.io.github.torvehammok.domain.LoadingMessages
-import io.github.torvehammok.io.github.torvehammok.infra.opencode.OCThread
-import io.github.torvehammok.io.github.torvehammok.infra.opencode.OCThreadMessage
-import io.github.torvehammok.io.github.torvehammok.infra.opencode.dto.OcAgentResponse
+import io.github.torvehammok.infra.opencode.OCThread
+import io.github.torvehammok.infra.opencode.OCThreadMessage
+import io.github.torvehammok.infra.opencode.dto.OcAgentResponse
 import org.koin.core.annotation.Singleton
 
 @Singleton

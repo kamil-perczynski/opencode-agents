@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:8-alpine
+    container_name: redis_server
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight_ui
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+    restart: unless-stopped
+volumes:
+  redis_data:
+  redisinsight_data:

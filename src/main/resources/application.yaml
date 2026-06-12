@@ -1,0 +1,29 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - io.github.torvehammok.AppServerKt.configureServer
+  banner: |
+    #               ▌      ▜     ▌           ▗
+    #  ▛▌▛▌█▌▛▌▛▘▛▌▛▌█▌▄▖▛▘▐ ▀▌▛▘▙▘▄▖▀▌▛▌█▌▛▌▜▘
+    #  ▙▌▙▌▙▖▌▌▙▖▙▌▙▌▙▖  ▄▌▐▖█▌▙▖▛▖  █▌▙▌▙▖▌▌▐▖
+    #    ▌                             ▄▌
+slack:
+  botToken: ${SLACK_BOT_TOKEN}
+  appToken: ${SLACK_APP_TOKEN}
+  channels:
+    - C0B783F5CLW
+
+opencode:
+  baseUrl: "https://opencode.k8s.kperczynski.click"
+  readTimeoutMs: 3000
+  # model: opencode-go/glm-5.1
+  model: opencode/big-pickle
+  prompt: >-
+    ### TOOL GUIDELINES
+    * **MCP**: You have authenticated access to github MCP as `kamil-perczynski`. All questions regarding code, github pertain first to kamil-perczynski repos. 
+    * YOU CANNOT EXPLORE OTHER REPOS WTHOUT EXPLICIT USER CONFIRMATION.  
+
+    ### RESPONSE GUIDELINES
+    * Your response must be wrapped in <response> and </response> XML tags.

@@ -1,4 +1,4 @@
-package io.github.torvehammok
+package io.github.torvehammok.io.github.torvehammok.domain
 
 class LoadingMessages {
 

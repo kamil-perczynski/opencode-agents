@@ -1,4 +1,6 @@
-package io.github.torvehammok.io.github.torvehammok
+package io.github.torvehammok.io.github.torvehammok.infra.opencode
+
+import com.sksamuel.hoplite.indent
 
 data class OCThread(
     val channelId: String,
@@ -29,7 +31,7 @@ fun toXml(thread: OCThread): String {
         <channelId>${escapeXml(thread.channelId)}</channelId>
         <threadTs>${escapeXml(thread.threadTs)}</threadTs>
         <messages>
-            $messagesXml
+            ${messagesXml.indent("        ")}
         </messages>
     </thread>
     """.trimIndent()

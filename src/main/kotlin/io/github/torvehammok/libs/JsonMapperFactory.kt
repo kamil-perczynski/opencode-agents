@@ -1,4 +1,4 @@
-package io.github.torvehammok.io.github.torvehammok.libs
+package io.github.torvehammok.libs
 
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule

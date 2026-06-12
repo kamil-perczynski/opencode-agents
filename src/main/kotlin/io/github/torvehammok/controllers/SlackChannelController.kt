@@ -2,10 +2,10 @@ package io.github.torvehammok.controllers
 
 import com.slack.api.bolt.App
 import com.slack.api.model.event.MessageEvent
-import io.github.torvehammok.io.github.torvehammok.domain.OcAgent
+import io.github.torvehammok.domain.OcAgent
 import io.github.torvehammok.infra.SlackProps
 import io.github.torvehammok.infra.slack.SlackController
-import io.github.torvehammok.service.SlackThreadService
+import io.github.torvehammok.domain.SlackThreadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.Singleton

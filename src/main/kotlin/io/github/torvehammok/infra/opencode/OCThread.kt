@@ -1,4 +1,4 @@
-package io.github.torvehammok.io.github.torvehammok.infra.opencode
+package io.github.torvehammok.infra.opencode
 
 import com.sksamuel.hoplite.indent
 

@@ -7,8 +7,8 @@ import io.github.ktor_batterypack.core.KtorBatterypackCoreModule
 import io.github.ktor_batterypack.core.config.loadConfig
 import io.github.ktor_batterypack.core.ktor.KtorProps
 import io.github.ktor_batterypack.metrics.KtorBatterypackMetricsModule
-import io.github.torvehammok.io.github.torvehammok.libs.JsonMapperFactory
-import io.github.torvehammok.httpclient.KtorHttpClientFactory
+import io.github.torvehammok.libs.JsonMapperFactory
+import io.github.torvehammok.infra.httpclient.KtorHttpClientFactory
 import io.github.torvehammok.infra.slack.SlackController
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineName

@@ -30,6 +30,7 @@ dependencies {
 
     implementation("io.github.kperczynski:ktor-batterypack-core:0.0.1-alpha")
     implementation("io.github.kperczynski:ktor-batterypack-metrics:0.0.1-alpha")
+    implementation("io.github.kperczynski:ktor-batterypack-redis:0.0.1-alpha")
 
     implementation(ktorLibs.serialization.jackson3)
     implementation(ktorLibs.server.config.yaml)

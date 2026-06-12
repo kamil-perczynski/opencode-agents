@@ -1,4 +1,4 @@
-package io.github.torvehammok.httpclient
+package io.github.torvehammok.infra.httpclient
 
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*

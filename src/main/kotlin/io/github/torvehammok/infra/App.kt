@@ -1,34 +1,37 @@
 package io.github.torvehammok.infra
 
-import com.slack.api.bolt.App as SlackApp
 import com.slack.api.bolt.AppConfig
-import com.slack.api.bolt.socket_mode.SocketModeApp
+import com.slack.api.bolt.jetty.SlackAppServer
 import io.github.ktor_batterypack.core.KtorBatterypackCoreModule
 import io.github.ktor_batterypack.core.config.loadConfig
 import io.github.ktor_batterypack.core.ktor.KtorProps
 import io.github.ktor_batterypack.metrics.KtorBatterypackMetricsModule
-import io.github.torvehammok.libs.JsonMapperFactory
+import io.github.ktor_batterypack.redis.KtorBatterypackRedisModule
+import io.github.ktor_batterypack.redis.RedisProps
 import io.github.torvehammok.infra.httpclient.KtorHttpClientFactory
-import io.github.torvehammok.infra.slack.SlackController
-import io.ktor.client.HttpClient
+import io.github.torvehammok.libs.JsonMapperFactory
+import io.ktor.client.*
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.annotation.*
+import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
+import com.slack.api.bolt.App as SlackApp
 
 @KoinApplication(
     configurations = ["custom"],
     modules = [
         KtorBatterypackCoreModule::class,
         KtorBatterypackMetricsModule::class,
+        KtorBatterypackRedisModule::class,
         AppModule::class
     ]
 )
 object App
 
-private val log = org.slf4j.LoggerFactory.getLogger(AppModule::class.java)
+private val log = LoggerFactory.getLogger(AppModule::class.java)
 
 @Module
 @ComponentScan("io.github.torvehammok")
@@ -45,6 +48,11 @@ class AppModule {
     @Singleton
     fun opencodeProps(configMap: ConfigMap): OpencodeProps {
         return configMap.opencode
+    }
+
+    @Singleton
+    fun redisProps(configMap: ConfigMap): RedisProps {
+        return configMap.redis
     }
 
     @Singleton
@@ -78,23 +86,18 @@ class AppModule {
     }
 
     @Singleton
-    fun slackApp(slackProps: SlackProps, controllers: List<SlackController>): SlackApp {
+    fun slackApp(slackProps: SlackProps): SlackApp {
         val config = AppConfig.builder()
             .singleTeamBotToken(slackProps.botToken)
             .build()
 
         val slackApp = SlackApp(config)
 
-        for (controller in controllers) {
-            log.info("Registering Slack controller: ${controller::class.java.simpleName}")
-            controller.register(slackApp)
-        }
-
         return slackApp
     }
 
     @Singleton
-    fun slackSocketModeApp(slackProps: SlackProps, slackApp: SlackApp): SocketModeApp {
-        return SocketModeApp(slackProps.appToken, slackApp)
+    fun slackSocketModeApp(slackProps: SlackProps, slackApp: SlackApp): SlackAppServer {
+        return SlackAppServer(slackApp, slackProps.server.path, slackProps.server.port)
     }
 }

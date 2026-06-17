@@ -1,18 +1,22 @@
 package io.github.torvehammok.domain
 
-import com.slack.api.bolt.context.builtin.EventContext
+import com.slack.api.bolt.App
 import com.slack.api.model.block.Blocks
 import com.slack.api.model.block.LayoutBlock
-import io.github.torvehammok.infra.opencode.OCThread
-import io.github.torvehammok.infra.opencode.OCThreadMessage
-import io.github.torvehammok.infra.opencode.dto.OcAgentResponse
+import io.github.torvehammok.domain.dto.OCThread
+import io.github.torvehammok.domain.dto.OCThreadMessage
+import io.github.torvehammok.domain.dto.OcAgentResponse
 import org.koin.core.annotation.Singleton
+import java.math.BigDecimal
+import kotlin.time.Duration
 
 @Singleton
-class SlackThreadService {
+class SlackThreadService(private val app: App) {
 
-    fun readThread(ctx: EventContext, threadTs: String, channel: String): OCThread {
-        val threadResponse = ctx.client().conversationsReplies {
+    fun readThread(threadTs: String, channel: String): OCThread {
+        val client = app.client()
+
+        val threadResponse = client.conversationsReplies {
             it.channel(channel).ts(threadTs)
         }
 
@@ -32,32 +36,35 @@ class SlackThreadService {
         )
     }
 
-    fun postResponse(ctx: EventContext, channel: String?, threadTs: String?, ocResponse: OcAgentResponse) {
+    fun postResponse(channel: String?, threadTs: String?, ocResponse: OcAgentResponse) {
+        val client = app.client()
         val text = ocResponse.response
-        val blocks = toBlocks(text, ocResponse)
+        val blocks = toBlocks(text, ocResponse.duration, ocResponse.toolsInvocations, ocResponse.cost)
 
-        ctx.client().chatPostMessage {
+        client.chatPostMessage {
             it.channel(channel)
                 .threadTs(threadTs)
                 .text(text)
                 .blocks(blocks)
         }
 
-        ctx.client().reactionsAdd {
+        client.reactionsAdd {
             it.channel(channel)
                 .timestamp(threadTs)
                 .name("checkered_flag")
         }
     }
 
-    fun setThinkingStatus(ctx: EventContext, threadTs: String?, eventTs: String?, channel: String) {
-        ctx.client().reactionsAdd {
+    fun setThinkingStatus(threadTs: String?, eventTs: String?, channel: String) {
+        val client = app.client()
+
+        client.reactionsAdd {
             it.channel(channel)
                 .timestamp(eventTs)
                 .name("opencode")
         }
 
-        ctx.client().assistantThreadsSetStatus {
+        client.assistantThreadsSetStatus {
             it.channelId(channel)
                 .threadTs(threadTs)
                 .status("is thinking...")
@@ -69,15 +76,24 @@ class SlackThreadService {
 
 }
 
-private fun toBlocks(text: String, ocResponse: OcAgentResponse): List<LayoutBlock> {
+private fun toBlocks(
+    text: String,
+    duration: Duration,
+    toolsInvocations: Int,
+    cost: BigDecimal
+): List<LayoutBlock> {
     val blocks = Blocks.asBlocks(
         Blocks.markdown { it.text(text) },
         Blocks.divider(),
-        Blocks.markdown { it.text("""
-            __Response generated in *${ocResponse.duration.inWholeSeconds}s__
-            __It took ${ocResponse.toolsInvocations} tool invocations, roughly $${ocResponse.cost.toPlainString()}__
-            _I am just a bot, I can make mistakes._
-        """.trimIndent()) }
+        Blocks.markdown {
+            it.text(
+                """
+                _Response generated in *${duration.inWholeSeconds}s*_
+                _It took $toolsInvocations tool invocations, roughly *$${cost.toPlainString()}*_
+                _I am just a bot, I can make mistakes._
+                """.trimIndent()
+            )
+        }
     )
 
     return blocks

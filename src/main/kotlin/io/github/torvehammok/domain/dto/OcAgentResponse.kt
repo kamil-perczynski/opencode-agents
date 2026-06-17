@@ -1,4 +1,4 @@
-package io.github.torvehammok.infra.opencode.dto
+package io.github.torvehammok.domain.dto
 
 import java.math.BigDecimal
 import kotlin.time.Duration

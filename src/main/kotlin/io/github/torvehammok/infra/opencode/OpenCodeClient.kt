@@ -1,7 +1,7 @@
 package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.metrics.client.pathPattern
-import io.github.torvehammok.infra.opencode.dto.OCMessage
+import io.github.torvehammok.domain.dto.OCMessage
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*

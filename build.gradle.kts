@@ -21,12 +21,13 @@ repositories {
 dependencies {
     // Source: https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-kotlin
     implementation("io.github.cdimascio:dotenv-kotlin:6.5.1")
-    implementation("com.slack.api:bolt-socket-mode:1.49.0")
-    implementation("javax.websocket:javax.websocket-api:1.1")
+    implementation("com.slack.api:bolt:1.49.0")
+    implementation("com.slack.api:bolt-jetty:1.49.0")
     implementation("org.glassfish.tyrus.bundles:tyrus-standalone-client:1.20")
 
     testImplementation(kotlin("test"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.10.2")
 
     implementation("io.github.kperczynski:ktor-batterypack-core:0.0.1-alpha")
     implementation("io.github.kperczynski:ktor-batterypack-metrics:0.0.1-alpha")

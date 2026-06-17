@@ -12,7 +12,9 @@ junit = "5.14.4"
 koin = "4.2.1"
 koin-plugin = "1.0.0-RC2"
 kotlin = "2.3.20"
+janino = "3.1.12"
 logback = "1.5.21"
+logstash-logback-encoder = "8.1"
 micrometer = "1.14.0"
 mockito = "5.2.1"
 testcontainers = "2.0.5"
@@ -40,7 +42,9 @@ mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "
 koin-annotations = { module = "io.insert-koin:koin-annotations", version.ref = "koin" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
+janino = { module = "org.codehaus.janino:janino", version.ref = "janino" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback-encoder" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.10" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }

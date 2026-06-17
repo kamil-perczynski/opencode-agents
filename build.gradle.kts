@@ -49,6 +49,8 @@ dependencies {
     implementation(libs.jackson.databind)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.logback.classic)
+    implementation(libs.logstash.logback.encoder)
+    implementation(libs.janino)
 
     implementation(ktorLibs.client.core)
     implementation(ktorLibs.client.cio)

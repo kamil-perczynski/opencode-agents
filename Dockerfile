@@ -11,8 +11,6 @@ RUN find /opt -name "opencode" -type f -exec ln -sf {} /usr/local/bin/opencode \
 
 WORKDIR /app
 
-COPY build/libs/* opencode-agents-1.0.jar
-
 COPY build/distributions/*.tar .
 RUN ls -la
 RUN tar -xf *.tar --strip-components=1 && rm *.tar

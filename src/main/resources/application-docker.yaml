@@ -1,0 +1,9 @@
+slack:
+  channels:
+    - id: C0B783F5CLW
+
+opencode:
+  baseUrl: "https://opencode.k8s.kperczynski.click"
+
+redis:
+  url: redis://redis:6379

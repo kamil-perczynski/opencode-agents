@@ -17,4 +17,5 @@ RUN tar -xf *.tar --strip-components=1 && rm *.tar
 
 EXPOSE 8080
 ENV JAVA_TOOL_OPTIONS="--enable-native-access=ALL-UNNAMED -XX:ActiveProcessorCount=4 -XX:MaxRAMPercentage=80 -XX:+UseCompactObjectHeaders"
+ENV JSON_LOG_FORMAT=true
 CMD ["./bin/opencode-agents"]

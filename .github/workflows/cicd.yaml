@@ -38,6 +38,7 @@ jobs:
             caches
             notifications
             wrapper
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Build
         env:
           USERNAME: ${{ github.actor }}
@@ -65,4 +66,4 @@ jobs:
             ghcr.io/${{ github.repository }}:${{ env.branch_type }}-${{ env.short_sha }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max' || '' }}

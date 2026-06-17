@@ -99,6 +99,7 @@ class AppModule {
     fun slackApp(slackProps: SlackProps): SlackApp {
         val config = AppConfig.builder()
             .singleTeamBotToken(slackProps.botToken)
+            .signingSecret(slackProps.signingSecret)
             .build()
 
         val slackApp = SlackApp(config)

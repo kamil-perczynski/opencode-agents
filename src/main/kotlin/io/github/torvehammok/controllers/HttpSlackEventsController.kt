@@ -23,10 +23,10 @@ class HttpSlackEventsController(
 
             val response = internalSlackServerHttpClient.post(slackProps.server.path) {
                 setBody(rawBodyBytes)
-
+                header(HttpHeaders.ContentType, call.request.contentType().toString())
                 call.request.headers.forEach { key, values ->
                     val lowerKey = key.lowercase()
-                    if (lowerKey != "host" && lowerKey != "content-length" && lowerKey != "transfer-encoding") {
+                    if (lowerKey.startsWith("x-slack")) {
                         values.forEach { value ->
                             headers.append(key, value)
                         }

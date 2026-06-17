@@ -4,7 +4,7 @@ FROM eclipse-temurin:25-jre-noble
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
-RUN curl -L -O "https://github.com/anomalyco/opencode/releases/download/v1.17.7/opencode-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')$(ldd --version 2>&1 | grep -qi musl && echo -musl).tar.gz" \
+RUN curl -L -O "https://github.com/anomalyco/opencode/releases/download/v1.17.7/opencode-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tar.gz" \
     && tar -xzf opencode-linux-*.tar.gz \
     && rm opencode-linux-*.tar.gz
 

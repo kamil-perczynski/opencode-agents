@@ -14,7 +14,8 @@ data class SlackProps(
     val botToken: String = "",
     val appToken: String = "",
     val channels: List<SlackChannelProps> = emptyList(),
-    val server : SlackServerProps = SlackServerProps()
+    val server : SlackServerProps = SlackServerProps(),
+    val signingSecret: String = ""
 )
 
 data class SlackServerProps(

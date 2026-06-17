@@ -1,4 +1,15 @@
 services:
+  server:
+    build: .
+    container_name: my_server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      APP_PROFILES: docker
   redis:
     image: redis:8-alpine
     container_name: redis_server

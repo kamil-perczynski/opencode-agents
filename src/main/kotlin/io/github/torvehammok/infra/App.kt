@@ -66,6 +66,16 @@ class AppModule {
     }
 
     @Singleton
+    @Named("slack")
+    fun slackHttpClient(httpClientFactory: KtorHttpClientFactory, slackProps: SlackProps): HttpClient {
+        return httpClientFactory.createHttpClient(
+            baseUrl = slackProps.server.baseUrl,
+            connectTimeoutMs = 1000,
+            readTimeoutMs = 5000
+        )
+    }
+
+    @Singleton
     fun ktorProps(configMap: ConfigMap): KtorProps {
         return configMap.ktor
     }

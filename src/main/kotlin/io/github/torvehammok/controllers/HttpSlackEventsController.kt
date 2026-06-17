@@ -19,9 +19,19 @@ class HttpSlackEventsController(
 ) : KtorController {
     override fun register(routing: Routing) {
         routing.post(slackProps.server.path) {
+            val rawBodyBytes = call.receive<ByteArray>()
+
             val response = internalSlackServerHttpClient.post(slackProps.server.path) {
-                setBody(call.receiveText())
-                headers.appendAll(call.request.headers)
+                setBody(rawBodyBytes)
+
+                call.request.headers.forEach { key, values ->
+                    val lowerKey = key.lowercase()
+                    if (lowerKey != "host" && lowerKey != "content-length" && lowerKey != "transfer-encoding") {
+                        values.forEach { value ->
+                            headers.append(key, value)
+                        }
+                    }
+                }
             }
 
             call.respondText(

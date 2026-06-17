@@ -1,14 +1,14 @@
 package io.github.torvehammok.domain
 
 import io.github.torvehammok.infra.opencode.OpenCodeClient
-import io.github.torvehammok.infra.opencode.dto.MessageTextPart
-import io.github.torvehammok.infra.opencode.dto.OCAgentStep
-import io.github.torvehammok.infra.opencode.dto.StepFinishPart
-import io.github.torvehammok.infra.opencode.dto.ToolPart
+import io.github.torvehammok.domain.dto.MessageTextPart
+import io.github.torvehammok.domain.dto.OCAgentStep
+import io.github.torvehammok.domain.dto.StepFinishPart
+import io.github.torvehammok.domain.dto.ToolPart
 import io.github.torvehammok.infra.OpencodeProps
-import io.github.torvehammok.infra.opencode.dto.OcAgentResponse
-import io.github.torvehammok.infra.opencode.OCThread
-import io.github.torvehammok.infra.opencode.toXml
+import io.github.torvehammok.domain.dto.OcAgentResponse
+import io.github.torvehammok.domain.dto.OCThread
+import io.github.torvehammok.domain.dto.toXml
 import kotlinx.coroutines.runBlocking
 import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
@@ -48,7 +48,7 @@ class OcAgent(
         val startTime = System.currentTimeMillis()
 
         val cmd = mutableListOf(
-            "opencode",
+            opencodeProps.opencodeBinary,
             "run",
             "--model",
             opencodeProps.model,

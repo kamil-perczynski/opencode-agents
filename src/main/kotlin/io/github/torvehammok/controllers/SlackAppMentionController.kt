@@ -4,11 +4,11 @@ import com.slack.api.bolt.App
 import com.slack.api.model.event.AppMentionEvent
 import com.slack.api.model.event.MessageChangedEvent
 import com.slack.api.model.event.MessageDeletedEvent
-import io.github.torvehammok.domain.OcAgent
+import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.infra.slack.SlackController
-import io.github.torvehammok.domain.SlackThreadService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import io.github.torvehammok.infra.slack.SlackMessageListener
+import io.github.torvehammok.infra.slack.SlackMessageListener.Companion.SLACK_MESSAGES_STREAM
+import io.github.torvehammok.infra.slack.SlackRedisMessage
 import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 
@@ -16,9 +16,7 @@ private val log = LoggerFactory.getLogger(SlackAppMentionController::class.java)
 
 @Singleton
 class SlackAppMentionController(
-    private val scope: CoroutineScope,
-    private val threadService: SlackThreadService,
-    private val ocAgent: OcAgent
+    private val redisStreamPublisher: RedisStreamPublisher,
 ) : SlackController {
 
     override fun register(app: App) {
@@ -26,19 +24,16 @@ class SlackAppMentionController(
             val event = req.event
             log.info("Received an app mention event in channel {} from user {}", event.channel, event.user)
 
-            val threadTs = event.threadTs ?: event.ts
-            val channel = event.channel
-
-            scope.launch {
-                try {
-                    threadService.setThinkingStatus(ctx, threadTs, event.ts, channel)
-                    val ocThread = threadService.readThread(ctx, threadTs, channel)
-                    val ocResponse = ocAgent.run(ocThread)
-                    threadService.postResponse(ctx, channel, threadTs, ocResponse)
-                } catch (e: Exception) {
-                    log.error("Error processing app mention event", e)
-                }
-            }
+            redisStreamPublisher.publish(
+                SLACK_MESSAGES_STREAM,
+                SlackRedisMessage(
+                    channelId = event.channel,
+                    threadTs = event.threadTs,
+                    ts = event.ts,
+                    userId = event.user,
+                    text = event.text ?: ""
+                )
+            )
 
             ctx.ack()
         }

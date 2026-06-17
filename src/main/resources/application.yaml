@@ -12,13 +12,15 @@ ktor:
 slack:
   botToken: ${SLACK_BOT_TOKEN}
   appToken: ${SLACK_APP_TOKEN}
-  channels:
-    - C0B783F5CLW
+  channels: []
+
+redis:
+  fetcher:
+    consumerGroup: "opencode-agent"
 
 opencode:
   baseUrl: "https://opencode.k8s.kperczynski.click"
   readTimeoutMs: 3000
-  # model: opencode-go/glm-5.1
   model: opencode/big-pickle
   prompt: >-
     ### TOOL GUIDELINES

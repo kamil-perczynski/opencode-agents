@@ -1,4 +1,4 @@
-package io.github.torvehammok.infra.opencode
+package io.github.torvehammok.domain.dto
 
 import com.sksamuel.hoplite.indent
 

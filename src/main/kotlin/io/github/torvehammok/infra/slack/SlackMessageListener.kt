@@ -3,7 +3,9 @@ package io.github.torvehammok.infra.slack
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.domain.SlackThreadService
-import io.github.torvehammok.infra.slack.OpenCodeMessageListener.Companion.OPENCODE_MESSAGES_STREAM
+import io.github.torvehammok.infra.opencode.OpenCodeMessageListener.Companion.OPENCODE_MESSAGES_STREAM
+import io.github.torvehammok.infra.opencode.OpenCodeRedisMessage
+import io.github.torvehammok.libs.RedisLocks
 import io.lettuce.core.ExperimentalLettuceCoroutinesApi
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.coroutines
@@ -11,7 +13,6 @@ import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
 import java.util.*
@@ -19,7 +20,6 @@ import java.util.*
 private val log = LoggerFactory.getLogger(SlackMessageListener::class.java)
 
 @OptIn(ExperimentalLettuceCoroutinesApi::class)
-@Singleton
 class SlackMessageListener(
     private val threadService: SlackThreadService,
     private val jsonMapper: JsonMapper,

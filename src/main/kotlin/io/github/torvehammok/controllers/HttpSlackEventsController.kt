@@ -1,7 +1,7 @@
 package io.github.torvehammok.controllers
 
 import io.github.ktor_batterypack.core.ktor.KtorController
-import io.github.torvehammok.infra.SlackProps
+import io.github.torvehammok.domain.SlackProps
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -10,9 +10,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.koin.core.annotation.Named
-import org.koin.core.annotation.Singleton
 
-@Singleton
 class HttpSlackEventsController(
     private val slackProps: SlackProps,
     @Named("slack") private val internalSlackServerHttpClient: HttpClient

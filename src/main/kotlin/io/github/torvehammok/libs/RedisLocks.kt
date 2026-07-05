@@ -1,13 +1,11 @@
 @file:OptIn(ExperimentalLettuceCoroutinesApi::class)
 
-package io.github.torvehammok.infra.slack
+package io.github.torvehammok.libs
 
 import io.lettuce.core.ExperimentalLettuceCoroutinesApi
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.coroutines
-import org.koin.core.annotation.Singleton
 
-@Singleton
 class RedisLocks(private val redisConnection: StatefulRedisConnection<String, String>) {
 
     suspend fun setLock(channelId: String, ts: String, ttlSeconds: Long) {

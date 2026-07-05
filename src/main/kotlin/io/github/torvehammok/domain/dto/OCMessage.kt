@@ -64,14 +64,15 @@ data class OCMessagePath(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
     property = "type",
-    visible = true
+    visible = true,
+    defaultImpl = MessageUnknownPart::class
 )
 @JsonSubTypes(
     JsonSubTypes.Type(MessageTextPart::class, name = "text"),
     JsonSubTypes.Type(MessageReasoningPart::class, name = "reasoning"),
     JsonSubTypes.Type(MessageStepStartPart::class, name = "step-start"),
     JsonSubTypes.Type(MessageStepFinishPart::class, name = "step-finish"),
-    JsonSubTypes.Type(MessageToolPart::class, name = "tool")
+    JsonSubTypes.Type(MessageToolPart::class, name = "tool"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 sealed class OCMessagePart
@@ -134,6 +135,16 @@ data class MessageToolPart(
     @param:JsonProperty("tool") val tool: String? = null,
     @param:JsonProperty("callID") val callID: String? = null,
     @param:JsonProperty("state") val state: MessageToolState? = null,
+    @param:JsonAnySetter val unknownFields: Map<String, Any?> = mutableMapOf()
+) : OCMessagePart()
+
+@JsonTypeName("unknown")
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MessageUnknownPart(
+    @param:JsonProperty("id") val id: String? = null,
+    @param:JsonProperty("sessionID") val sessionID: String? = null,
+    @param:JsonProperty("messageID") val messageID: String? = null,
+    @param:JsonProperty("type") val type: String? = null,
     @param:JsonAnySetter val unknownFields: Map<String, Any?> = mutableMapOf()
 ) : OCMessagePart()
 

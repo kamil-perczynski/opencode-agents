@@ -1,9 +1,9 @@
-package io.github.torvehammok.infra.slack
+package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.domain.OcAgent
-import io.github.torvehammok.infra.slack.OpenCodeSessionCompletedListener.Companion.OPENCODE_SESSION_COMPLETED_STREAM
+import io.github.torvehammok.libs.RedisLocks
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +46,7 @@ class OpenCodeMessageListener(
                 val ocResponse = ocAgent.run(msg.thread)
 
                 redisStreamPublisher.publish(
-                    OPENCODE_SESSION_COMPLETED_STREAM,
+                    OpenCodeSessionCompletedListener.OPENCODE_SESSION_COMPLETED_STREAM,
                     OpenCodeSessionCompletedMessage(
                         text = ocResponse.response,
                         sessionId = msg.sessionId,

@@ -1,4 +1,4 @@
-package io.github.torvehammok.infra.slack
+package io.github.torvehammok.infra.opencode
 
 import java.math.BigDecimal
 

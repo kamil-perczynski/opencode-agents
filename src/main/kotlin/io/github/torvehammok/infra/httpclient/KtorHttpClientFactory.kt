@@ -7,6 +7,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.serialization.jackson3.*
 import io.github.ktor_batterypack.metrics.client.ClientMicrometerMetricsPlugin
+import io.ktor.util.AttributeKey
 import io.micrometer.core.instrument.MeterRegistry
 import org.koin.core.annotation.Singleton
 import tools.jackson.databind.DeserializationFeature
@@ -36,6 +37,10 @@ class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
         install(Logging) {
             logger = Logger.DEFAULT
             level = LogLevel.HEADERS
+
+            filter { request ->
+                request.attributes.getOrNull(DisableLogging) != true
+            }
         }
 
         install(HttpTimeout) {
@@ -52,3 +57,5 @@ class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
         }
     }
 }
+
+val DisableLogging = AttributeKey<Boolean>("Silent")

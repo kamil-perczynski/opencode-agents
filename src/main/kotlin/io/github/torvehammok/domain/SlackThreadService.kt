@@ -6,11 +6,9 @@ import com.slack.api.model.block.LayoutBlock
 import io.github.torvehammok.domain.dto.OCThread
 import io.github.torvehammok.domain.dto.OCThreadMessage
 import io.github.torvehammok.domain.dto.OcAgentResponse
-import org.koin.core.annotation.Singleton
 import java.math.BigDecimal
 import kotlin.time.Duration
 
-@Singleton
 class SlackThreadService(private val app: App) {
 
     fun readThread(threadTs: String, channel: String): OCThread {

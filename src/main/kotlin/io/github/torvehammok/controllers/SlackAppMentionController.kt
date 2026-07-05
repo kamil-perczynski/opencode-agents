@@ -8,12 +8,10 @@ import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.infra.slack.SlackController
 import io.github.torvehammok.infra.slack.SlackMessageListener.Companion.SLACK_MESSAGES_STREAM
 import io.github.torvehammok.infra.slack.SlackRedisMessage
-import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 
 private val log = LoggerFactory.getLogger(SlackAppMentionController::class.java)
 
-@Singleton
 class SlackAppMentionController(
     private val redisStreamPublisher: RedisStreamPublisher,
 ) : SlackController {

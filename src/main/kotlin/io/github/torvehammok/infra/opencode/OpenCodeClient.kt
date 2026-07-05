@@ -1,7 +1,9 @@
 package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.metrics.client.pathPattern
+import io.github.torvehammok.domain.OpenCodeProps
 import io.github.torvehammok.domain.dto.OCMessage
+import io.github.torvehammok.infra.httpclient.DisableLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -12,15 +14,27 @@ import tools.jackson.databind.JsonNode
 import java.util.Base64
 
 @Singleton
-class OpenCodeClient(@Named("opencode") private val httpClient: HttpClient) {
+class OpenCodeClient(
+    @Named("opencode") private val httpClient: HttpClient,
+    private val opencodeProps: OpenCodeProps
+) {
+
+    suspend fun fetchHealthcheckStatus(): HttpStatusCode {
+        val response = httpClient.get {
+            pathPattern("/global/health")
+            url("/global/health")
+            opencodeAuth(opencodeProps)
+            attributes.put(DisableLogging, true)
+        }
+
+        return response.status
+    }
 
     suspend fun fetchPendingSessions(): List<String> {
         val response = httpClient.get {
             pathPattern("/session/status")
             url("/session/status")
-            headers {
-                append("Authorization", javaBasicAuthHeader("opencode", "passwd"))
-            }
+            opencodeAuth(opencodeProps)
         }
 
         return when (response.status) {
@@ -41,9 +55,7 @@ class OpenCodeClient(@Named("opencode") private val httpClient: HttpClient) {
         val response = httpClient.get {
             pathPattern("/session/{sessionId}/message")
             url("/session/$sessionId/message")
-            headers {
-                append("Authorization", javaBasicAuthHeader("opencode", "passwd"))
-            }
+            opencodeAuth(opencodeProps)
         }
 
         return when (response.status) {
@@ -62,6 +74,13 @@ class OpenCodeClient(@Named("opencode") private val httpClient: HttpClient) {
 
 }
 
+private fun HttpRequestBuilder.opencodeAuth(opencodeProps: OpenCodeProps) {
+    if (opencodeProps.password != null) {
+        headers {
+            append("Authorization", javaBasicAuthHeader(opencodeProps.username ?: "username", opencodeProps.password))
+        }
+    }
+}
 
 fun javaBasicAuthHeader(username: String, password: String): String {
     val credentials = "$username:$password"

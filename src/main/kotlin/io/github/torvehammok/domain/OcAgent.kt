@@ -5,7 +5,6 @@ import io.github.torvehammok.domain.dto.MessageTextPart
 import io.github.torvehammok.domain.dto.OCAgentStep
 import io.github.torvehammok.domain.dto.StepFinishPart
 import io.github.torvehammok.domain.dto.ToolPart
-import io.github.torvehammok.infra.OpencodeProps
 import io.github.torvehammok.domain.dto.OcAgentResponse
 import io.github.torvehammok.domain.dto.OCThread
 import io.github.torvehammok.domain.dto.toXml
@@ -30,7 +29,7 @@ private val log = LoggerFactory.getLogger(OcAgent::class.java)
 class OcAgent(
     private val jsonMapper: JsonMapper,
     private val openCodeClient: OpenCodeClient,
-    private val opencodeProps: OpencodeProps
+    private val opencodeProps: OpenCodeProps
 ) {
 
     private val executorService = ThreadPoolExecutor(

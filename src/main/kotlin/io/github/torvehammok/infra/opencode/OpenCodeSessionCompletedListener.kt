@@ -1,8 +1,9 @@
-package io.github.torvehammok.infra.slack
+package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.torvehammok.domain.SlackThreadService
 import io.github.torvehammok.domain.dto.OcAgentResponse
+import io.github.torvehammok.libs.RedisLocks
 import io.lettuce.core.ExperimentalLettuceCoroutinesApi
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.coroutines
@@ -11,7 +12,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
 import kotlin.time.Duration.Companion.seconds
@@ -19,7 +19,6 @@ import kotlin.time.Duration.Companion.seconds
 private val log = LoggerFactory.getLogger(OpenCodeSessionCompletedListener::class.java)
 
 @OptIn(ExperimentalLettuceCoroutinesApi::class)
-@Singleton
 class OpenCodeSessionCompletedListener(
     private val threadService: SlackThreadService,
     private val jsonMapper: JsonMapper,

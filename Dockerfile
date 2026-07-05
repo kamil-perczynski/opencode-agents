@@ -1,6 +1,5 @@
 FROM eclipse-temurin:25-jre-noble
 
-# Standard Ubuntu uses apt-get
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
@@ -11,10 +10,12 @@ RUN curl -L -O "https://github.com/anomalyco/opencode/releases/download/v1.17.7/
 RUN find /opt -name "opencode" -type f -exec ln -sf {} /usr/local/bin/opencode \;
 
 WORKDIR /app
-COPY build/distributions/*.tar .
-RUN tar -xf *.tar --strip-components=1 && rm *.tar
+COPY build/docker-dist/lib lib
+COPY build/docker-dist/app .
+COPY opencode-config opencode-config
 
 EXPOSE 8080
+
 ENV JAVA_TOOL_OPTIONS="--enable-native-access=ALL-UNNAMED -XX:ActiveProcessorCount=4 -XX:MaxRAMPercentage=80 -XX:+UseCompactObjectHeaders"
 ENV JSON_LOG_FORMAT=true
-CMD ["./bin/opencode-agents"]
+CMD ["java", "-cp", "*:lib/*", "io.github.torvehammok.KtorMainKt"]

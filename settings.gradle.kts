@@ -6,8 +6,8 @@ pluginManagement {
             name = "GitHubPackages"
             url =  uri("https://maven.pkg.github.com/kamil-perczynski/ktor-batterypack")
             credentials {
-                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GH_USERNAME")
-                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GH_TOKEN")
+                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
+                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
             }
         }
         mavenCentral()

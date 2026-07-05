@@ -3,16 +3,14 @@ package io.github.torvehammok.controllers
 import com.slack.api.bolt.App
 import com.slack.api.model.event.MessageEvent
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
-import io.github.torvehammok.infra.SlackProps
+import io.github.torvehammok.domain.SlackProps
 import io.github.torvehammok.infra.slack.SlackController
 import io.github.torvehammok.infra.slack.SlackMessageListener.Companion.SLACK_MESSAGES_STREAM
 import io.github.torvehammok.infra.slack.SlackRedisMessage
-import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 
 private val log = LoggerFactory.getLogger(SlackChannelController::class.java)
 
-@Singleton
 class SlackChannelController(
     private val redisStreamPublisher: RedisStreamPublisher,
     private val slackProps: SlackProps

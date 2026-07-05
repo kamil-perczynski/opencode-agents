@@ -1,5 +1,6 @@
 [versions]
 assertj = "3.27.7"
+batterypack = "0.0.7-alpha"
 conform = "0.11.1"
 exposed = "1.2.0"
 hikari = "7.0.2"
@@ -21,15 +22,11 @@ testcontainers = "2.0.5"
 
 [libraries]
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
-conform = { module = "io.konform:konform", version.ref = "conform" }
+batterypack-core = { module = "io.github.kperczynski:ktor-batterypack-core", version.ref = "batterypack" }
+batterypack-metrics = { module = "io.github.kperczynski:ktor-batterypack-metrics", version.ref = "batterypack" }
+batterypack-redis = { module = "io.github.kperczynski:ktor-batterypack-redis", version.ref = "batterypack" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 
-exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
-exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
-exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
-exposed-json = { module = "org.jetbrains.exposed:exposed-json", version.ref = "exposed" }
-exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc", version.ref = "exposed" }
-hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 hoplite-core = { module = "com.sksamuel.hoplite:hoplite-core", version.ref = "hoplite" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
@@ -50,6 +47,7 @@ postgresql = { module = "org.postgresql:postgresql", version = "42.7.10" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 
 [plugins]
+batterypack = { id = "ktor-batterypack-gradle-plugin", version.ref = "batterypack" }
 koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koin-plugin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

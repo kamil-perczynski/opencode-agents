@@ -10,6 +10,8 @@ ktor:
     #  ▙▌▙▌▙▖▌▌▙▖▙▌▙▌▙▖  ▄▌▐▖█▌▙▖▛▖  █▌▙▌▙▖▌▌▐▖
     #    ▌                             ▄▌
 slack:
+  server:
+    enabled: true
   botToken: ${SLACK_BOT_TOKEN}
   appToken: ${SLACK_APP_TOKEN}
   signingSecret: ${SLACK_SIGNING_SECRET}
@@ -20,9 +22,22 @@ redis:
     consumerGroup: "opencode-agent"
 
 opencode:
-  baseUrl: "https://opencode.k8s.kperczynski.click"
+  server:
+    enabled: true
+    env:
+      custom:
+        OPENCODE_CONFIG_DIR: ./opencode-config
+        OPENCODE_CONFIG: ./opencode-config/opencode.json
+        GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN}
+      pass:
+        - GITHUB_PERSONAL_ACCESS_TOKEN
+        - HOME
+        - PWD
+        - LANG
+        - SHELL
+        - TMPDIR
+        - PATH
   readTimeoutMs: 3000
-  model: opencode/big-pickle
   prompt: >-
     ### TOOL GUIDELINES
     * **MCP**: You have authenticated access to github MCP as `kamil-perczynski`. All questions regarding code, github pertain first to kamil-perczynski repos. 

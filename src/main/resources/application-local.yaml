@@ -1,6 +1,9 @@
 slack:
+  server:
+    enabled: true
   channels:
     - id: C0B783F5CLW
 
 opencode:
-  baseUrl: "https://opencode.k8s.kperczynski.click"
+  server:
+    enabled: true

@@ -8,7 +8,7 @@ import io.github.torvehammok.infra.opencode.OpenCodeServerModule
 import io.github.torvehammok.infra.slack.SlackModule
 import io.ktor.server.application.*
 import org.koin.dsl.module
-import org.koin.plugin.module.dsl.modules
+import org.koin.plugin.module.dsl.module
 import org.koin.plugin.module.dsl.withConfiguration
 import org.slf4j.LoggerFactory
 
@@ -25,10 +25,11 @@ fun Application.configureServer() {
         )
 
         if (configmap.opencode.server.enabled) {
-            modules(OpenCodeServerModule::class)
+            module<OpenCodeServerModule>()
         }
+
         if (configmap.slack.server.enabled) {
-            modules(SlackModule::class)
+            module<SlackModule>()
         }
 
         withConfiguration<App>()

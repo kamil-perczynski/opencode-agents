@@ -13,11 +13,9 @@ import io.github.torvehammok.libs.JsonMapperFactory
 import io.ktor.client.*
 import io.lettuce.core.api.StatefulRedisConnection
 import org.koin.core.annotation.*
-import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
 
 @KoinApplication(
-    configurations = ["custom"],
     modules = [
         KtorBatterypackCoreModule::class,
         KtorBatterypackMetricsModule::class,
@@ -27,8 +25,6 @@ import tools.jackson.databind.json.JsonMapper
     ]
 )
 object App
-
-private val log = LoggerFactory.getLogger(AppModule::class.java)
 
 @Module(
     includes = [

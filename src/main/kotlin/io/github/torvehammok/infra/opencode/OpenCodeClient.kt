@@ -4,20 +4,93 @@ import io.github.ktor_batterypack.metrics.client.pathPattern
 import io.github.torvehammok.domain.OpenCodeProps
 import io.github.torvehammok.domain.dto.OCMessage
 import io.github.torvehammok.infra.httpclient.DisableLogging
+import io.github.torvehammok.infra.opencode.model.OCPromptAsyncRequest
+import io.github.torvehammok.infra.opencode.model.OCPromptModel
+import io.github.torvehammok.infra.opencode.model.OCPromptPart
+import io.github.torvehammok.infra.opencode.model.OCSseEvent
+import io.github.torvehammok.infra.opencode.model.OpenCodeSession
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.sse.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import org.koin.core.annotation.Named
 import org.koin.core.annotation.Singleton
 import tools.jackson.databind.JsonNode
-import java.util.Base64
+import tools.jackson.databind.json.JsonMapper
+import java.util.*
+
 
 @Singleton
 class OpenCodeClient(
     @Named("opencode") private val httpClient: HttpClient,
-    private val opencodeProps: OpenCodeProps
+    private val opencodeProps: OpenCodeProps,
+    private val jsonMapper: JsonMapper
 ) {
+
+    suspend fun subscribeSessionEvents(sessionId: String, onEvent: (event: OCSseEvent) -> Unit) {
+        httpClient.sse(
+            "/global/event",
+            request = { header(HttpHeaders.ContentType, ContentType.Text.EventStream) }
+        ) {
+            incoming.collect { serverEvent ->
+                val eventJson = jsonMapper.readValue(serverEvent.data, OCSseEvent::class.java)
+
+                if (eventJson.payload?.properties?.sessionID == sessionId) {
+                    onEvent(eventJson)
+                }
+            }
+        }
+    }
+
+    suspend fun createSession(): String {
+        val response = httpClient.post {
+            pathPattern("/session")
+            url("/session")
+            opencodeAuth(opencodeProps)
+            setBody("{}")
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+        }
+
+        if (!response.status.isSuccess()) {
+            throw RuntimeException("Failed to open new session")
+        }
+
+        val body = response.body<OpenCodeSession>()
+
+        return body.id
+    }
+
+    suspend fun promptAsync(agent: String, prompt: String, sessionId: String, modelId: String): HttpStatusCode {
+        val split = modelId.split("/")
+        val providerId = split[0]
+        val model = split[1]
+
+        val response = httpClient.post {
+            url("/session/$sessionId/prompt_async")
+            pathPattern("/session/{sessionId}/prompt_async")
+            opencodeAuth(opencodeProps)
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody(
+                jsonMapper.writeValueAsString(
+                    OCPromptAsyncRequest(
+                        agent = agent,
+                        parts = listOf(OCPromptPart(type = "text", text = prompt)),
+                        model = OCPromptModel(
+                            providerID = providerId,
+                            modelID = model
+                        )
+                    )
+                )
+            )
+        }
+
+        if (!response.status.isSuccess()) {
+            throw RuntimeException("Failed to prompt session")
+        }
+
+        return response.status
+    }
 
     suspend fun fetchHealthcheckStatus(): HttpStatusCode {
         val response = httpClient.get {
@@ -28,27 +101,6 @@ class OpenCodeClient(
         }
 
         return response.status
-    }
-
-    suspend fun fetchPendingSessions(): List<String> {
-        val response = httpClient.get {
-            pathPattern("/session/status")
-            url("/session/status")
-            opencodeAuth(opencodeProps)
-        }
-
-        return when (response.status) {
-            HttpStatusCode.OK ->
-                response.body<List<String>>()
-
-            HttpStatusCode.UnprocessableEntity -> {
-                val problemDetail = response.body<JsonNode>()
-                throw RuntimeException("Failed to fetch pending sessions: $problemDetail")
-            }
-
-            else ->
-                throw RuntimeException("Unexpected error from opencode service: ${response.status}")
-        }
     }
 
     suspend fun fetchSessionMessages(sessionId: String): List<OCMessage> {

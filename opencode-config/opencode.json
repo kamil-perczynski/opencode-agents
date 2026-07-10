@@ -18,7 +18,7 @@
   },
   "agent": {
     "slack-bot": {
-      "steps": 5
+      "steps": 18
     }
   },
   "permission": {
@@ -36,6 +36,7 @@
     "grep": {
       "*": "deny"
     },
+    "task": "deny",
     "list": {
       "*": "deny"
     },

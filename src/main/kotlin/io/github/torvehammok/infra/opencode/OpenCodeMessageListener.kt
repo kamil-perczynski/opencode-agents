@@ -2,7 +2,7 @@ package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
-import io.github.torvehammok.domain.OcAgent
+import io.github.torvehammok.domain.OCServerAgent
 import io.github.torvehammok.libs.RedisLocks
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -17,7 +17,7 @@ private val log = LoggerFactory.getLogger(OpenCodeMessageListener::class.java)
 @Singleton
 class OpenCodeMessageListener(
     private val redisStreamPublisher: RedisStreamPublisher,
-    private val ocAgent: OcAgent,
+    private val serverAgent: OCServerAgent,
     private val jsonMapper: JsonMapper,
     private val redisLocks: RedisLocks
 ) : RedisStreamListener {
@@ -43,7 +43,7 @@ class OpenCodeMessageListener(
 
             redisLocks.setLock(msg.sessionId, "1", ttlSeconds = 180)
             try {
-                val ocResponse = ocAgent.run(msg.thread)
+                val ocResponse = serverAgent.run(msg.thread)
 
                 redisStreamPublisher.publish(
                     OpenCodeSessionCompletedListener.OPENCODE_SESSION_COMPLETED_STREAM,

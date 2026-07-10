@@ -7,6 +7,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.serialization.jackson3.*
 import io.github.ktor_batterypack.metrics.client.ClientMicrometerMetricsPlugin
+import io.ktor.client.plugins.sse.SSE
 import io.ktor.util.AttributeKey
 import io.micrometer.core.instrument.MeterRegistry
 import org.koin.core.annotation.Singleton
@@ -14,6 +15,7 @@ import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.SerializationFeature
 import tools.jackson.databind.cfg.DateTimeFeature
 import tools.jackson.module.kotlin.KotlinModule
+import kotlin.time.Duration.Companion.seconds
 
 @Singleton
 class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
@@ -24,6 +26,11 @@ class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
         readTimeoutMs: Long
     ): HttpClient = HttpClient(CIO) {
         expectSuccess = false
+
+        install(SSE) {
+            maxReconnectionAttempts = 5
+            reconnectionTime = 3.seconds
+        }
 
         install(ContentNegotiation) {
             jackson {

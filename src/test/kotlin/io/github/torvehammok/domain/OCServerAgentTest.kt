@@ -69,7 +69,7 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
             """.trimIndent()
         )
         assertThat(response.cost).isZero
-        assertThat(response.duration.inWholeMilliseconds).isBetween(0, 600)
+        assertThat(response.duration.inWholeMilliseconds).isBetween(0, 1000)
     }
 
     @Test

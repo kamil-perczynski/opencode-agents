@@ -26,7 +26,7 @@ dependencies {
     implementation("com.slack.api:bolt-jetty:1.49.0")
     implementation("org.glassfish.tyrus.bundles:tyrus-standalone-client:1.20")
 
-    testImplementation(kotlin("test"))
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.10.2")
 
@@ -58,6 +58,15 @@ dependencies {
     implementation(ktorLibs.client.contentNegotiation)
     implementation(ktorLibs.client.logging)
 
+    testImplementation(kotlin("test"))
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.batterypack.redis.testing)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.assertj.core)
+    testImplementation(ktorLibs.server.testHost)
+    testImplementation(ktorLibs.client.mock)
+    testImplementation(libs.testcontainers)
+    testImplementation("org.wiremock:wiremock:3.13.1")
 }
 
 kotlin {

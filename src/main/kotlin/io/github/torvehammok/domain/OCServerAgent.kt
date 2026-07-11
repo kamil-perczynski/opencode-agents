@@ -1,15 +1,21 @@
 package io.github.torvehammok.domain
 
-import io.github.ktor_batterypack.core.Closer
 import io.github.torvehammok.domain.dto.*
 import io.github.torvehammok.infra.opencode.OpenCodeClient
+import io.github.torvehammok.infra.opencode.OpenCodeClientException
+import io.github.torvehammok.infra.opencode.model.OCSseEvent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
@@ -17,27 +23,64 @@ import java.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toKotlinDuration
 
-private val log = LoggerFactory.getLogger(OcAgent::class.java)
+private val log = LoggerFactory.getLogger(OCServerAgent::class.java)
 
 @Singleton
 class OCServerAgent(private val openCodeClient: OpenCodeClient, private val opencodeProps: OpenCodeProps) {
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + CoroutineName("OCServerAgent"))
 
     suspend fun run(conversation: OCThread): OcAgentResponse {
         val prompt = opencodeProps.prompt.trimIndent() + "\n" + toXml(conversation)
 
-
         val t0 = System.currentTimeMillis()
-        var totalCost = BigDecimal(0, MathContext(4, RoundingMode.HALF_UP))
-        var toolsInvocations = 0
 
-        val closer = Closer()
+        var sub = OcAgenticSessionSub(sessionId = "<session_id>") // mutable object
 
-        val sessionId = openCodeClient.createSession()
+        try {
+            sub = sub.copy(sessionId = openCodeClient.createSession())
+            subscribeToOpenCodeSSE(sub)
 
-        val job = scope.launch {
-            openCodeClient.subscribeSessionEvents(sessionId) { data ->
+            openCodeClient.promptAsync(
+                agent = opencodeProps.agent,
+                prompt = prompt,
+                sessionId = sub.sessionId,
+                modelId = opencodeProps.model
+            )
+
+            val agentResponse = withTimeout(opencodeProps.maxAgentSessionDurationSeconds.seconds) {
+                sub.response.await()
+            }
+
+            return agentResponse.copy(duration = toSessionDuration(t0))
+        } catch (ex: TimeoutCancellationException) {
+            log.info("Session {} has timed out. {}", sub.sessionId, ex.message)
+
+            return OcAgentResponse(
+                response = "The agent did not manage to respond in time. Try again later.",
+                cost = sub.cost,
+                toolsInvocations = sub.toolInvocations,
+                duration = toSessionDuration(t0)
+            )
+        } catch (ex: OpenCodeClientException) {
+            log.warn("Session {} has been aborted due to opencode server error: {}", sub.sessionId, ex.message, ex)
+
+            return OcAgentResponse(
+                response = "Oops! The agent has broken down. Rest assured - we will fix it. Just try again later.",
+                cost = sub.cost,
+                toolsInvocations = sub.toolInvocations,
+                duration = toSessionDuration(t0)
+            )
+        }
+    }
+
+    private fun subscribeToOpenCodeSSE(sub: OcAgenticSessionSub): OcAgenticSessionSub {
+        var lastTextMessage: OCSseEvent? = null
+
+        scope.launch {
+            openCodeClient.subscribeSessionEvents(sub.sessionId) { data ->
+                MDC.put("sessionId", sub.sessionId)
+
                 try {
                     when (data.payload?.type) {
                         "message.updated", "message.part.updated" -> {
@@ -49,83 +92,65 @@ class OCServerAgent(private val openCodeClient: OpenCodeClient, private val open
                             val info = data.payload.properties?.info
 
                             if (info?.finish == "stop") {
-                                closer.close()
+                                log.info("Session {} finished successfully", sub.sessionId)
+
+                                val response = OcAgentResponse(
+                                    response = lastTextMessage?.payload?.properties?.part?.text ?: "",
+                                    cost = sub.cost,
+                                    toolsInvocations = sub.toolInvocations,
+                                    duration = Duration.ofMillis(0L).toKotlinDuration()
+                                )
+
+                                sub.response.complete(response)
+                                this.cancel()
                                 return@subscribeSessionEvents
                             }
 
                             if (cost != null) {
-                                totalCost = totalCost.plus(BigDecimal(cost))
+                                sub.cost = sub.cost.plus(BigDecimal(cost))
                             }
 
                             when (type) {
                                 "tool" if toolState?.status == "running" -> {
                                     log.info("opencode> {}, state={}", tool, toolState)
-                                    toolsInvocations++
+                                    sub.toolInvocations++
                                 }
-                                "text" -> log.info("opencode> {}, text={}", type, text)
-                                "reasoning" -> log.info("opencode> reasoning")
+
+                                "text" -> {
+                                    log.info("opencode> {}, text={}", type, text)
+                                    lastTextMessage = data
+                                }
+
+                                "reasoning" -> log.debug("opencode> reasoning")
                                 else -> log.trace("opencode> {}", data.payload.properties)
                             }
                         }
 
-                        "message.part.delta" -> {} // ignore
+                        else -> log.trace("Event: {}", data)
                     }
                 } catch (ex: CancellationException) {
-                    log.info("Session {} finished successfullly", sessionId)
+                    log.warn("Session {} finished hit a timeout", sub.sessionId, ex)
+                    sub.response.completeExceptionally(ex)
                     return@subscribeSessionEvents
                 } catch (ex: Exception) {
-                    log.warn("Failed to deserialize OCAgentStep", ex)
+                    sub.response.completeExceptionally(ex)
+                    this.cancel()
                 }
             }
         }
-        closer.add { job.cancel() }
 
-        openCodeClient.promptAsync(
-            agent = opencodeProps.agent,
-            prompt = prompt,
-            sessionId = sessionId,
-            modelId = opencodeProps.model
-        )
-
-        withTimeout(opencodeProps.maxAgentSessionDurationSeconds.seconds) { job.join() }
-
-        val msgs = openCodeClient.fetchSessionMessages(sessionId)
-        val response = msgs.last()
-            .parts
-            .find { it is MessageTextPart } as MessageTextPart?
-
-        val agentResponse = toTextFromPart(response?.text)
-
-        return OcAgentResponse(
-            response = agentResponse,
-            cost = totalCost,
-            toolsInvocations = toolsInvocations,
-            duration = Duration.ofMillis(System.currentTimeMillis() - t0).toKotlinDuration()
-        )
+        return sub
     }
 
 }
 
-private fun toTextFromPart(partText: String?): String {
-    val text = partText ?: ""
-
-    if (text.contains("<response>") || text.contains("</response>")) {
-        var startIdx = 0
-        var endIdx = text.length
-
-        val startTagIndex = text.indexOf("<response>")
-        val endTagIndex = text.indexOf("</response>")
-
-        if (startTagIndex != -1) {
-            startIdx = startTagIndex + "<response>".length
-        }
-        if (endTagIndex != -1) {
-            endIdx = endTagIndex
-        }
-
-        val res = text.substring(startIdx, endIdx).trimIndent()
-        return res
-    }
-
-    return text
+private fun toSessionDuration(startTimeMillis: Long): kotlin.time.Duration {
+    return Duration.ofMillis(System.currentTimeMillis() - startTimeMillis).toKotlinDuration()
 }
+
+private data class OcAgenticSessionSub(
+    val sessionId: String,
+    var cost: BigDecimal = BigDecimal(0, MathContext(4, RoundingMode.HALF_UP)),
+    var toolInvocations: Int = 0,
+    val response: CompletableDeferred<OcAgentResponse> = CompletableDeferred()
+)

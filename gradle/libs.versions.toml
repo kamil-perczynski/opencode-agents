@@ -25,6 +25,7 @@ assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 batterypack-core = { module = "io.github.kperczynski:ktor-batterypack-core", version.ref = "batterypack" }
 batterypack-metrics = { module = "io.github.kperczynski:ktor-batterypack-metrics", version.ref = "batterypack" }
 batterypack-redis = { module = "io.github.kperczynski:ktor-batterypack-redis", version.ref = "batterypack" }
+batterypack-redis-testing = { module = "io.github.kperczynski:ktor-batterypack-redis-testing", version.ref = "batterypack" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 
 hoplite-core = { module = "com.sksamuel.hoplite:hoplite-core", version.ref = "hoplite" }

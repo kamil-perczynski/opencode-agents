@@ -11,10 +11,10 @@ ktor:
     #    ▌                             ▄▌
 slack:
   server:
-    enabled: true
-  botToken: ${SLACK_BOT_TOKEN}
-  appToken: ${SLACK_APP_TOKEN}
-  signingSecret: ${SLACK_SIGNING_SECRET}
+    enabled: false
+  botToken: ""
+  appToken: ""
+  signingSecret: ""
   channels: []
 
 redis:
@@ -28,7 +28,7 @@ opencode:
       custom:
         OPENCODE_CONFIG_DIR: ./opencode-config
         OPENCODE_CONFIG: ./opencode-config/opencode.json
-        GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN}
+        GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
       pass:
         - GITHUB_PERSONAL_ACCESS_TOKEN
         - HOME
@@ -42,6 +42,3 @@ opencode:
     ### TOOL GUIDELINES
     * **MCP**: You have authenticated access to github MCP as `kamil-perczynski`. All questions regarding code, github pertain first to kamil-perczynski repos. 
     * YOU CANNOT EXPLORE OTHER REPOS WTHOUT EXPLICIT USER CONFIRMATION.  
-
-    ### RESPONSE GUIDELINES
-    * Your response must be wrapped in <response> and </response> XML tags.

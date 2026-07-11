@@ -7,6 +7,7 @@ import io.github.torvehammok.infra.ConfigMap
 import io.github.torvehammok.infra.opencode.OpenCodeServerModule
 import io.github.torvehammok.infra.slack.SlackModule
 import io.ktor.server.application.*
+import org.koin.core.KoinApplication
 import org.koin.dsl.module
 import org.koin.plugin.module.dsl.module
 import org.koin.plugin.module.dsl.withConfiguration
@@ -16,23 +17,35 @@ private val log = LoggerFactory.getLogger("Application")
 
 fun Application.configureServer() {
     configureKtorServer { profiles ->
-        val configmap = loadConfig(profiles = profiles)
-        modules(
-            module {
-                single { this@configureServer }
-                single { configmap }
-            }
-        )
+        val koinApp = this@configureKtorServer
+        val ktorApp = this@configureServer
 
-        if (configmap.opencode.server.enabled) {
-            module<OpenCodeServerModule>()
-        }
-
-        if (configmap.slack.server.enabled) {
-            module<SlackModule>()
-        }
+        configureKoinAndKtor(profiles, koinApp, ktorApp)
 
         withConfiguration<App>()
+    }
+}
+
+internal fun configureKoinAndKtor(
+    profiles: String,
+    koinApp: KoinApplication,
+    ktorApp: Application
+) {
+    val configmap = loadConfig(profiles = profiles)
+
+    koinApp.modules(
+        module {
+            single { ktorApp }
+            single { configmap }
+        }
+    )
+
+    if (configmap.opencode.server.enabled) {
+        koinApp.module<OpenCodeServerModule>()
+    }
+
+    if (configmap.slack.server.enabled) {
+        koinApp.module<SlackModule>()
     }
 }
 
@@ -40,5 +53,5 @@ fun Application.configureServer() {
 private fun loadConfig(profiles: String): ConfigMap {
     val profileList = profiles.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     log.info("Loading application configuration with profiles: $profileList")
-    return loadConfig(profileList, false)
+    return loadConfig(profileList, true)
 }

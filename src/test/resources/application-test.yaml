@@ -1,0 +1,14 @@
+slack:
+  server:
+    enabled: false
+  channels:
+    - id: C0B783F5CLW
+
+redis:
+  url: redis://redis:6379
+
+opencode:
+  baseUrl: "http://127.0.0.1:18622"
+  server:
+    enabled: false
+  maxAgentSessionDurationSeconds: 2

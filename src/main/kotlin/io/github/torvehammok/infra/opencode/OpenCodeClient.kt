@@ -2,21 +2,18 @@ package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.metrics.client.pathPattern
 import io.github.torvehammok.domain.OpenCodeProps
-import io.github.torvehammok.domain.dto.OCMessage
 import io.github.torvehammok.infra.httpclient.DisableLogging
-import io.github.torvehammok.infra.opencode.model.OCPromptAsyncRequest
-import io.github.torvehammok.infra.opencode.model.OCPromptModel
-import io.github.torvehammok.infra.opencode.model.OCPromptPart
-import io.github.torvehammok.infra.opencode.model.OCSseEvent
-import io.github.torvehammok.infra.opencode.model.OpenCodeSession
+import io.github.torvehammok.infra.opencode.model.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.sse.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.cancellable
 import org.koin.core.annotation.Named
 import org.koin.core.annotation.Singleton
-import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.util.*
 
@@ -30,13 +27,16 @@ class OpenCodeClient(
 
     suspend fun subscribeSessionEvents(sessionId: String, onEvent: (event: OCSseEvent) -> Unit) {
         httpClient.sse(
-            "/global/event",
-            request = { header(HttpHeaders.ContentType, ContentType.Text.EventStream) }
+            urlString = "/global/event",
+            request = { header(HttpHeaders.ContentType, ContentType.Text.EventStream) },
         ) {
-            incoming.collect { serverEvent ->
-                val eventJson = jsonMapper.readValue(serverEvent.data, OCSseEvent::class.java)
+            incoming.cancellable().collect { serverEvent ->
+                currentCoroutineContext().ensureActive()
 
-                if (eventJson.payload?.properties?.sessionID == sessionId) {
+                val eventJson = jsonMapper.readValue(serverEvent.data, OCSseEvent::class.java)
+                val eventSessionId = eventJson.payload?.properties?.sessionID
+
+                if (eventSessionId == sessionId) {
                     onEvent(eventJson)
                 }
             }
@@ -53,7 +53,7 @@ class OpenCodeClient(
         }
 
         if (!response.status.isSuccess()) {
-            throw RuntimeException("Failed to open new session")
+            throw OpenCodeClientException("Failed to open new session")
         }
 
         val body = response.body<OpenCodeSession>()
@@ -61,7 +61,7 @@ class OpenCodeClient(
         return body.id
     }
 
-    suspend fun promptAsync(agent: String, prompt: String, sessionId: String, modelId: String): HttpStatusCode {
+    suspend fun promptAsync(agent: String, prompt: String, sessionId: String, modelId: String) {
         val split = modelId.split("/")
         val providerId = split[0]
         val model = split[1]
@@ -86,10 +86,8 @@ class OpenCodeClient(
         }
 
         if (!response.status.isSuccess()) {
-            throw RuntimeException("Failed to prompt session")
+            throw OpenCodeClientException("Failed to prompt session")
         }
-
-        return response.status
     }
 
     suspend fun fetchHealthcheckStatus(): HttpStatusCode {
@@ -101,27 +99,6 @@ class OpenCodeClient(
         }
 
         return response.status
-    }
-
-    suspend fun fetchSessionMessages(sessionId: String): List<OCMessage> {
-        val response = httpClient.get {
-            pathPattern("/session/{sessionId}/message")
-            url("/session/$sessionId/message")
-            opencodeAuth(opencodeProps)
-        }
-
-        return when (response.status) {
-            HttpStatusCode.OK ->
-                response.body<List<OCMessage>>()
-
-            HttpStatusCode.UnprocessableEntity -> {
-                val problemDetail = response.body<JsonNode>()
-                throw RuntimeException("Failed to fetch session messages: $problemDetail")
-            }
-
-            else ->
-                throw RuntimeException("Unexpected error from opencode service: ${response.status}")
-        }
     }
 
 }

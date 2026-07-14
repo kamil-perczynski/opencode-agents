@@ -19,5 +19,6 @@ data class OpenCodeProps(
         * Your response must be wrapped in <response> and </response> XML tags.
             
     """.trimIndent(),
-    val maxAgentSessionDurationSeconds: Long = 180
+    val maxAgentSessionDurationSeconds: Long = 180,
+    val configSync: ConfigSyncProps = ConfigSyncProps()
 )

@@ -10,6 +10,12 @@ services:
       - .env
     environment:
       APP_PROFILES: docker
+      OPENCODE_CONFIGSYNC_ENABLED: "true"
+      OPENCODE_CONFIGSYNC_REPOURL: "git@github.com:org/opencode-config.git"
+      OPENCODE_CONFIGSYNC_SSH_PRIVATEKEYPATH: "/run/secrets/ssh-key"
+    volumes:
+      - ./secrets/ssh-key:/run/secrets/ssh-key:ro
+      - opencode_config:/app/opencode-config
   redis:
     image: redis:8-alpine
     container_name: redis_server
@@ -32,3 +38,4 @@ services:
 volumes:
   redis_data:
   redisinsight_data:
+  opencode_config:

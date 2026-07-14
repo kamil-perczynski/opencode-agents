@@ -10,3 +10,17 @@ redis:
 opencode:
   server:
     enabled: true
+    env:
+      custom:
+        OPENCODE_CONFIG_DIR: /app/opencode-config
+        OPENCODE_CONFIG: /app/opencode-config/opencode.json
+  configSync:
+    enabled: ${OPENCODE_CONFIGSYNC_ENABLED:-false}
+    repoUrl: ${OPENCODE_CONFIGSYNC_REPOURL:-}
+    branch: ${OPENCODE_CONFIGSYNC_BRANCH:-main}
+    targetDir: /app/opencode-config
+    intervalSeconds: 300
+    ssh:
+      privateKeyPath: ${OPENCODE_CONFIGSYNC_SSH_PRIVATEKEYPATH:-}
+      knownHostsPath: ${OPENCODE_CONFIGSYNC_SSH_KNOWNHOSTSPATH:-}
+      strictHostKeyChecking: ${OPENCODE_CONFIGSYNC_SSH_STRICTHOSTKEYCHECKING:-true}

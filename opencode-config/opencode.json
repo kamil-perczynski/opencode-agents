@@ -18,7 +18,10 @@
   },
   "agent": {
     "slack-bot": {
-      "steps": 18
+      "steps": 18,
+      "permission": {
+        "task": "deny"
+      }
     }
   },
   "permission": {
@@ -29,19 +32,22 @@
     "edit": {
       "*": "deny"
     },
-    "external_directory": "deny",
+    "external_directory": {
+      "*": "deny",
+      "~/.local/share/opencode/tool-output/*": "allow"
+    },
     "glob": {
       "*": "deny"
     },
     "grep": {
       "*": "deny"
     },
-    "task": "deny",
     "list": {
       "*": "deny"
     },
     "read": {
-      "*": "deny"
+      "*": "deny",
+      "~/.local/share/opencode/tool-output/*": "allow"
     }
   }
 }

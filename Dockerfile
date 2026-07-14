@@ -12,7 +12,7 @@ RUN find /opt -name "opencode" -type f -exec ln -sf {} /usr/local/bin/opencode \
 WORKDIR /app
 COPY build/docker-dist/lib lib
 COPY build/docker-dist/app .
-COPY opencode-config opencode-config
+RUN mkdir -p /app/opencode-config
 
 EXPOSE 8080
 

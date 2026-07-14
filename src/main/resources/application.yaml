@@ -37,6 +37,16 @@ opencode:
         - SHELL
         - TMPDIR
         - PATH
+  configSync:
+    enabled: false
+    repoUrl: ""
+    branch: "main"
+    targetDir: "./opencode-config"
+    intervalSeconds: 300
+    ssh:
+      privateKeyPath: ""
+      knownHostsPath: ""
+      strictHostKeyChecking: true
   readTimeoutMs: 3000
   prompt: >-
     ### TOOL GUIDELINES

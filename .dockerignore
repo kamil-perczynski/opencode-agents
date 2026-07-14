@@ -1,4 +1,3 @@
 *
 !build/distributions
 !build/docker-dist
-!opencode-config

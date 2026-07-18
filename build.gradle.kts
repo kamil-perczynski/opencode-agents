@@ -23,8 +23,10 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-kotlin
     implementation("io.github.cdimascio:dotenv-kotlin:6.5.1")
 
-    implementation("org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r")
-    implementation("org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.3.0.202506031305-r")
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.7.0.202606012155-r")
+    implementation("org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.7.0.202606012155-r")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.81")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.81")
     implementation("com.slack.api:bolt:1.49.0")
     implementation("com.slack.api:bolt-jetty:1.49.0")
     implementation("org.glassfish.tyrus.bundles:tyrus-standalone-client:1.20")
@@ -69,6 +71,7 @@ dependencies {
     testImplementation(ktorLibs.server.testHost)
     testImplementation(ktorLibs.client.mock)
     testImplementation(libs.testcontainers)
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.wiremock:wiremock:3.13.1")
 }
 

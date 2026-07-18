@@ -1,7 +1,6 @@
 package io.github.torvehammok.infra
 
 import io.github.ktor_batterypack.core.KtorBatterypackCoreModule
-import io.github.ktor_batterypack.core.di.InitCallback
 import io.github.ktor_batterypack.core.ktor.KtorProps
 import io.github.ktor_batterypack.metrics.KtorBatterypackMetricsModule
 import io.github.ktor_batterypack.redis.KtorBatterypackRedisModule
@@ -10,7 +9,6 @@ import io.github.ktor_batterypack.redis.RedisProps
 import io.github.torvehammok.domain.ConfigSyncProps
 import io.github.torvehammok.domain.OpenCodeProps
 import io.github.torvehammok.infra.httpclient.KtorHttpClientFactory
-import io.github.torvehammok.infra.opencode.ConfigSyncJob
 import io.github.torvehammok.libs.RedisLocks
 import io.github.torvehammok.libs.JsonMapperFactory
 import io.ktor.client.*
@@ -78,11 +76,6 @@ class AppModule {
     @Singleton
     fun configSyncProps(@Provided configMap: ConfigMap): ConfigSyncProps {
         return configMap.opencode.configSync
-    }
-
-    @Singleton(binds = [InitCallback::class, AutoCloseable::class])
-    fun configSyncJob(@Provided props: ConfigSyncProps): ConfigSyncJob {
-        return ConfigSyncJob(props)
     }
 
 }

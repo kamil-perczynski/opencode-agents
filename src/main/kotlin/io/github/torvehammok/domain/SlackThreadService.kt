@@ -7,6 +7,7 @@ import io.github.torvehammok.domain.dto.OCThread
 import io.github.torvehammok.domain.dto.OCThreadMessage
 import io.github.torvehammok.domain.dto.OcAgentResponse
 import java.math.BigDecimal
+import java.text.DecimalFormat
 import kotlin.time.Duration
 
 class SlackThreadService(private val app: App) {
@@ -80,6 +81,8 @@ private fun toBlocks(
     toolsInvocations: Int,
     cost: BigDecimal
 ): List<LayoutBlock> {
+    val formattedString = toFormattedCost(cost)
+
     val blocks = Blocks.asBlocks(
         Blocks.markdown { it.text(text) },
         Blocks.divider(),
@@ -87,7 +90,7 @@ private fun toBlocks(
             it.text(
                 """
                 _Response generated in *${duration.inWholeSeconds}s*_
-                _It took $toolsInvocations tool invocations, roughly *$${cost.toPlainString()}*_
+                _It took $toolsInvocations tool invocations, roughly *$${formattedString}*_
                 _I am just a bot, I can make mistakes._
                 """.trimIndent()
             )
@@ -95,4 +98,10 @@ private fun toBlocks(
     )
 
     return blocks
+}
+
+private fun toFormattedCost(cost: BigDecimal): String? {
+    val formatter = DecimalFormat("#,##0.000000")
+    val formattedString = formatter.format(cost)
+    return formattedString
 }

@@ -2,6 +2,7 @@ package io.github.torvehammok.infra.opencode
 
 import io.github.ktor_batterypack.core.di.InitCallback
 import io.github.torvehammok.domain.OpenCodeProps
+import io.github.torvehammok.infra.git.SSHGitConfigFetcher
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.BufferedReader
@@ -11,7 +12,10 @@ import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(OpenCodeServerManager::class.java)
 
-class OpenCodeServerManager(private val opencodeProps: OpenCodeProps) : AutoCloseable, InitCallback {
+class OpenCodeServerManager(
+    private val opencodeProps: OpenCodeProps,
+    private val sshGitConfigFetcher: SSHGitConfigFetcher
+) : AutoCloseable, InitCallback {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("opencode-server"))
 
@@ -19,6 +23,7 @@ class OpenCodeServerManager(private val opencodeProps: OpenCodeProps) : AutoClos
 
     override fun onInit() {
         if (opencodeProps.server.enabled) {
+            sshGitConfigFetcher.gitClone()
             start()
         }
     }

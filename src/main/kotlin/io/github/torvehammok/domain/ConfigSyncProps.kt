@@ -10,7 +10,8 @@ data class ConfigSyncProps(
 )
 
 data class SshProps(
-    val privateKeyPath: String = "",
+    val sshDir: String = "opencode-data/.ssh",
+    val privateKeyPath: String = "opencode-data/.ssh/github",
     val knownHostsPath: String = "",
     val strictHostKeyChecking: Boolean = true
 )

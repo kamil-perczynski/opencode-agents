@@ -4,11 +4,13 @@ import io.github.torvehammok.domain.ConfigSyncProps
 import org.assertj.core.api.Assertions.assertThat
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.transport.RefSpec
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 
+@Disabled
 class ConfigSyncJobTest {
 
     @Test

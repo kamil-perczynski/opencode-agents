@@ -39,14 +39,14 @@ opencode:
         - PATH
   configSync:
     enabled: false
-    repoUrl: ""
+    repoUrl: "git@github.com:kamil-perczynski/kperczynski-charts.git"
     branch: "main"
-    targetDir: "./opencode-config"
-    intervalSeconds: 300
+    targetDir: "./opencode-data/config"
     ssh:
-      privateKeyPath: ""
+      sshDir: "./opencode-data/.ssh"
+      privateKeyPath: "./opencode-data/.ssh/github"
       knownHostsPath: ""
-      strictHostKeyChecking: true
+      strictHostKeyChecking: false
   readTimeoutMs: 3000
   prompt: >-
     ### TOOL GUIDELINES

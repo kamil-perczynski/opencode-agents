@@ -16,13 +16,10 @@ import org.slf4j.LoggerFactory
 private val log = LoggerFactory.getLogger("Application")
 
 fun Application.configureServer() {
-    configureKtorServer { profiles ->
-        val koinApp = this@configureKtorServer
-        val ktorApp = this@configureServer
-
+    configureKtorServer { ktorApp, koinApp, profiles ->
         configureKoinAndKtor(profiles, koinApp, ktorApp)
 
-        withConfiguration<App>()
+        koinApp.withConfiguration<App>()
     }
 }
 

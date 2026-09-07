@@ -1,7 +1,9 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-    kotlin("jvm") version "2.3.21"
-    alias(libs.plugins.koin.compiler)
-    alias(libs.plugins.batterypack)
+    alias(batterypackLibs.plugins.kotlin.jvm)
+    alias(batterypackLibs.plugins.koin.compiler)
+    alias(batterypackLibs.plugins.ktor.batterypack)
     application
 }
 
@@ -20,8 +22,8 @@ repositories {
 }
 
 dependencies {
-    // Source: https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-kotlin
-    implementation("io.github.cdimascio:dotenv-kotlin:6.5.1")
+    implementation(batterypackLibs.dotenv.kotlin)
+    ksp(batterypackLibs.ktor.batterypack.validation.ksp)
 
     implementation("org.eclipse.jgit:org.eclipse.jgit:7.7.0.202606012155-r")
     implementation("org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.7.0.202606012155-r")
@@ -31,48 +33,28 @@ dependencies {
     implementation("com.slack.api:bolt-jetty:1.49.0")
     implementation("org.glassfish.tyrus.bundles:tyrus-standalone-client:1.20")
 
-
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactive:1.10.2")
-
-    implementation(libs.batterypack.core)
-    implementation(libs.batterypack.metrics)
-    implementation(libs.batterypack.redis)
-
-    implementation(ktorLibs.serialization.jackson3)
-    implementation(ktorLibs.server.config.yaml)
-    implementation(ktorLibs.server.contentNegotiation)
-    implementation(ktorLibs.server.core)
-    implementation(ktorLibs.server.netty)
-    implementation(ktorLibs.server.statusPages)
-
-    implementation(libs.lettuce.core)
-    implementation(libs.hoplite.core)
-    implementation(libs.hoplite.yaml)
-    implementation(libs.koin.annotations)
-    implementation(libs.koin.core)
-    implementation(libs.koin.ktor)
-    implementation(libs.jackson.databind)
-    implementation(libs.jackson.module.kotlin)
-    implementation(libs.logback.classic)
-    implementation(libs.logstash.logback.encoder)
+    implementation(batterypackLibs.kotlinx.coroutines.core)
+    implementation(batterypackLibs.kotlinx.coroutines.reactive)
+    implementation(batterypackLibs.exposed.jdbc)
+    implementation(batterypackLibs.jakarta.annotation.api)
+    implementation(batterypackLibs.jakarta.validation.api)
+    implementation(batterypackLibs.ktor.batterypack.core)
+    implementation(batterypackLibs.ktor.batterypack.annotations)
+    implementation(batterypackLibs.ktor.batterypack.validation)
+    implementation(batterypackLibs.ktor.batterypack.metrics)
+    implementation(batterypackLibs.ktor.batterypack.redis)
+    implementation(batterypackLibs.logstash.logback.encoder)
     implementation(libs.janino)
 
-    implementation(ktorLibs.client.core)
-    implementation(ktorLibs.client.cio)
-    implementation(ktorLibs.client.contentNegotiation)
-    implementation(ktorLibs.client.logging)
-
     testImplementation(kotlin("test"))
-    testImplementation(platform(libs.junit.bom))
-    testImplementation(libs.batterypack.redis.testing)
-    testImplementation(libs.junit.jupiter)
-    testImplementation(libs.assertj.core)
+    testImplementation(platform(batterypackLibs.junit.bom))
+    testImplementation(batterypackLibs.ktor.batterypack.redis.testing)
+    testImplementation(batterypackLibs.junit.jupiter)
+    testImplementation(batterypackLibs.assertj.core)
+    testImplementation(batterypackLibs.testcontainers)
+    testImplementation(batterypackLibs.wiremock)
     testImplementation(ktorLibs.server.testHost)
     testImplementation(ktorLibs.client.mock)
-    testImplementation(libs.testcontainers)
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
-    testImplementation("org.wiremock:wiremock:3.13.1")
 }
 
 kotlin {
@@ -91,4 +73,12 @@ tasks.jar {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+ktorBatterypack {
+    configMetadataClass = "io.github.torvehammok.infra.ConfigMap"
+}
+
+tasks.compileKotlin {
+    compilerOptions.freeCompilerArgs.set(listOf("-Xannotation-default-target=param-property"))
 }

@@ -1,3 +1,8 @@
 package io.github.torvehammok.domain
 
-data class SlackChannelProps(val id: String)
+import com.fasterxml.jackson.annotation.JsonPropertyDescription
+
+data class SlackChannelProps(
+    @param:JsonPropertyDescription("Slack channel ID")
+    val id: String
+)

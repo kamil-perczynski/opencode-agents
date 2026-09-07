@@ -1,3 +1,4 @@
+$schema: "../../../build/generated/ksp/main/resources/META-INF/config-schema.yaml"
 slack:
   server:
     enabled: true

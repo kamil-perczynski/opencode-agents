@@ -14,7 +14,7 @@ import org.koin.core.annotation.Singleton
 @Module
 class OpenCodeServerModule {
 
-    @Singleton(binds = [InitCallback::class])
+    @Singleton(binds = [InitCallback::class, AutoCloseable::class])
     fun openCodeServerManager(
         @Provided opencodeProps: OpenCodeProps,
         @Provided sshGitConfigFetcher: SSHGitConfigFetcher

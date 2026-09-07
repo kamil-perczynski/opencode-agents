@@ -34,12 +34,8 @@ open class OpenCodeAgentsIT {
             val builder = ApplicationTestBuilder()
             builder.environment { config = MapApplicationConfig("app.profiles" to "test") }
             builder.application {
-                val ktorApp = this
-
-                configureKtorServer { profiles ->
-                    val koinApp = this
-
-                    properties(mapOf("app.profiles" to profiles))
+                configureKtorServer { ktorApp, koinApp, profiles ->
+                    koinApp.properties(mapOf("app.profiles" to profiles))
 
                     configureKoinAndKtor(
                         profiles = profiles,
@@ -47,7 +43,7 @@ open class OpenCodeAgentsIT {
                         koinApp = koinApp
                     )
 
-                    withConfiguration<TestApp>()
+                    koinApp.withConfiguration<TestApp>()
                 }
             }
 

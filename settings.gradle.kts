@@ -3,12 +3,8 @@ rootProject.name = "opencode-agents"
 pluginManagement {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url =  uri("https://maven.pkg.github.com/kamil-perczynski/ktor-batterypack")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
-            }
+            name = "KtorBaterrypackMaven"
+            url = uri("https://repo.repsy.io/ktor-baterrypack/maven")
         }
         mavenCentral()
         gradlePluginPortal()
@@ -18,12 +14,8 @@ pluginManagement {
 dependencyResolutionManagement {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/kamil-perczynski/ktor-batterypack")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
-            }
+            name = "KtorBaterrypackMaven"
+            url = uri("https://repo.repsy.io/ktor-baterrypack/maven")
         }
         mavenCentral()
     }

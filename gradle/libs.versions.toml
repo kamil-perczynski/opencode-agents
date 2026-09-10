@@ -1,19 +1,5 @@
 [versions]
-batterypack = "0.0.11-alpha"
 janino = "3.1.12"
-logstash-logback-encoder = "8.1"
 
 [libraries]
-batterypack-core = { module = "io.github.ktor_batterypack:ktor-batterypack-core", version.ref = "batterypack" }
-batterypack-validation-ksp = { module = "io.github.ktor_batterypack:ktor-batterypack-validation-ksp", version.ref = "batterypack" }
-batterypack-validation = { module = "io.github.ktor_batterypack:ktor-batterypack-validation", version.ref = "batterypack" }
-batterypack-annotation = { module = "io.github.ktor_batterypack:ktor-batterypack-annotations", version.ref = "batterypack" }
-batterypack-metrics = { module = "io.github.ktor_batterypack:ktor-batterypack-metrics", version.ref = "batterypack" }
-batterypack-redis = { module = "io.github.ktor_batterypack:ktor-batterypack-redis", version.ref = "batterypack" }
-batterypack-redis-testing = { module = "io.github.ktor_batterypack:ktor-batterypack-redis-testing", version.ref = "batterypack" }
-
 janino = { module = "org.codehaus.janino:janino", version.ref = "janino" }
-logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback-encoder" }
-
-[plugins]
-batterypack = { id = "ktor-batterypack-gradle-plugin", version.ref = "batterypack" }

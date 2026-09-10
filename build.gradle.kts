@@ -1,25 +1,11 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
     alias(batterypackLibs.plugins.kotlin.jvm)
     alias(batterypackLibs.plugins.koin.compiler)
     alias(batterypackLibs.plugins.ktor.batterypack)
-    application
 }
 
 group = "io.github.torvehammok"
 version = "1.0-SNAPSHOT"
-
-repositories {
-    mavenCentral()
-    maven {
-        url = uri("https://maven.pkg.github.com/kamil-perczynski/ktor-batterypack")
-        credentials {
-            username = project.findProperty("gpr.user") as String? ?: System.getenv("GITHUB_ACTOR")
-            password = project.findProperty("gpr.key") as String? ?: System.getenv("GITHUB_TOKEN")
-        }
-    }
-}
 
 dependencies {
     implementation(batterypackLibs.dotenv.kotlin)
@@ -61,21 +47,12 @@ kotlin {
     jvmToolchain(25)
 }
 
-application {
-    mainClass.set("io.github.torvehammok.KtorMainKt")
-}
-
-tasks.jar {
-    manifest {
-        attributes["Main-Class"] = "io.github.torvehammok.KtorMainKt"
-    }
-}
-
 tasks.test {
     useJUnitPlatform()
 }
 
 ktorBatterypack {
+    mainClass = "io.github.torvehammok.KtorMainKt"
     configMetadataClass = "io.github.torvehammok.infra.ConfigMap"
 }
 

@@ -4,7 +4,7 @@ pluginManagement {
     repositories {
         maven {
             name = "KtorBaterrypackMaven"
-            url = uri("https://repo.repsy.io/ktor-baterrypack/maven")
+            url = uri("https://repo.repsy.io/ktor-batterypack/maven")
         }
         mavenCentral()
         gradlePluginPortal()
@@ -15,7 +15,7 @@ dependencyResolutionManagement {
     repositories {
         maven {
             name = "KtorBaterrypackMaven"
-            url = uri("https://repo.repsy.io/ktor-baterrypack/maven")
+            url = uri("https://repo.repsy.io/ktor-batterypack/maven")
         }
         mavenCentral()
     }

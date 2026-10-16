@@ -4,12 +4,11 @@ import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo
 import io.github.torvehammok.domain.MockOCServerApi
 import io.github.torvehammok.domain.OpenCodeAgentsIT
-import io.github.torvehammok.infra.opencode.model.OCPromptAsyncRequest
-import io.github.torvehammok.infra.opencode.model.OCPromptPart
-import io.github.torvehammok.infra.opencode.model.OCSseEvent
-import io.github.torvehammok.infra.opencode.model.OCSseInfo
-import io.github.torvehammok.infra.opencode.model.OCSsePayload
-import io.github.torvehammok.infra.opencode.model.OCSseProperties
+import io.github.torvehammok.infra.opencode.model.OCCreateSessionRequest
+import io.github.torvehammok.infra.opencode.model.OCEvent
+import io.github.torvehammok.infra.opencode.model.OCEventData
+import io.github.torvehammok.infra.opencode.model.OCModelRef
+import io.github.torvehammok.infra.opencode.model.OCPromptRequest
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -44,13 +43,14 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
                 res.withBody(
                     json.writeValueAsString(
                         mapOf(
-                            "id" to expectedSessionId,
-                            "slug" to "test",
-                            "projectID" to "proj_test",
-                            "directory" to "/tmp/test",
-                            "path" to "/tmp/test",
-                            "cost" to 0.0,
-                            "title" to "Test Session"
+                            "data" to mapOf(
+                                "id" to expectedSessionId,
+                                "projectID" to "proj_test",
+                                "agent" to "test-agent",
+                                "model" to mapOf("id" to "gpt-4", "providerID" to "openai"),
+                                "cost" to 0.0,
+                                "title" to "Test Session"
+                            )
                         )
                     )
                 )
@@ -58,10 +58,20 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
         )
 
         // when:
-        val sessionId = openCodeClient.createSession()
+        val sessionId = openCodeClient.createSession(agent = "test-agent", modelId = "openrouter/openai/gpt-4")
 
         // then:
         assertThat(sessionId).isEqualTo(expectedSessionId)
+
+        // and: agent and model are set on the session, model id keeps everything after the provider
+        val requests = mockOCServerApi.findRequests<OCCreateSessionRequest>(urlEqualTo("/api/session"))
+
+        assertThat(requests).containsExactly(
+            OCCreateSessionRequest(
+                agent = "test-agent",
+                model = OCModelRef(providerID = "openrouter", id = "openai/gpt-4")
+            )
+        )
     }
 
     @Test
@@ -74,44 +84,34 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
         )
 
         // expect:
-        val thrown = catchThrowable { runBlocking { openCodeClient.createSession() } }
+        val thrown = catchThrowable { runBlocking { openCodeClient.createSession(agent = "test-agent", modelId = "openai/gpt-4") } }
         assertThat(thrown)
             .isInstanceOf(OpenCodeClientException::class.java)
             .hasMessage("Failed to open new session")
     }
 
     @Test
-    fun testPromptAsyncReturnsSuccessAndSplitsModelId(): Unit = runBlocking {
+    fun testPromptSendsText(): Unit = runBlocking {
         // given:
         val sessionId = "ses_prompt_123"
-        mockOCServerApi.mockPromptAsync(sessionId)
+        mockOCServerApi.mockPrompt(sessionId)
 
         // when:
-        openCodeClient.promptAsync(
-            agent = "test-agent",
-            prompt = "Hello",
-            sessionId = sessionId,
-            modelId = "openai/gpt-4"
-        )
+        openCodeClient.prompt(sessionId = sessionId, prompt = "Hello")
 
         // then:
-        val requests = mockOCServerApi.findRequests<OCPromptAsyncRequest>(
-            urlEqualTo("/session/$sessionId/prompt_async")
+        val requests = mockOCServerApi.findRequests<OCPromptRequest>(
+            urlEqualTo("/api/session/$sessionId/prompt")
         )
 
-        assertThat(requests).satisfiesExactly({ request ->
-            assertThat(request.agent).isEqualTo("test-agent")
-            assertThat(request.parts).containsExactly(OCPromptPart(type = "text", text = "Hello"))
-            assertThat(request.model.providerID).isEqualTo("openai")
-            assertThat(request.model.modelID).isEqualTo("gpt-4")
-        })
+        assertThat(requests).containsExactly(OCPromptRequest(text = "Hello"))
     }
 
     @Test
-    fun testPromptAsyncThrowsOnFailure(): Unit = runBlocking {
+    fun testPromptThrowsOnFailure(): Unit = runBlocking {
         // given:
         val sessionId = "ses_prompt_fail"
-        mockOCServerApi.mockPromptAsync(
+        mockOCServerApi.mockPrompt(
             sessionId = sessionId,
             responseDef = { res, _ ->
                 res.withStatus(503).withBody("Service Unavailable")
@@ -121,12 +121,7 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
         // expect:
         val thrown = catchThrowable {
             runBlocking {
-                openCodeClient.promptAsync(
-                    agent = "test-agent",
-                    prompt = "Hello",
-                    sessionId = sessionId,
-                    modelId = "openai/gpt-4"
-                )
+                openCodeClient.prompt(sessionId = sessionId, prompt = "Hello")
             }
         }
 
@@ -145,36 +140,23 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
             responseDef = { res, _ ->
                 res.withBody(
                     toSSEBody(
-                        OCSseEvent(
-                            payload = OCSsePayload(
-                                properties = OCSseProperties(sessionID = otherSessionId)
-                            )
-                        ),
-                        OCSseEvent(
-                            payload = OCSsePayload(
-                                properties = OCSseProperties(sessionID = targetSessionId)
-                            )
-                        ),
-                        OCSseEvent(
-                            payload = OCSsePayload(
-                                properties = OCSseProperties(
-                                    sessionID = targetSessionId,
-                                    info = OCSseInfo(finish = "stop")
-                                )
-                            )
-                        )
+                        OCEvent(type = "server.connected", data = OCEventData()),
+                        OCEvent(type = "session.execution.started", data = OCEventData(sessionID = otherSessionId)),
+                        OCEvent(type = "session.execution.started", data = OCEventData(sessionID = targetSessionId)),
+                        OCEvent(type = "session.execution.succeeded", data = OCEventData(sessionID = targetSessionId))
                     )
                 )
             }
         )
 
-        val capturedEvents = mutableListOf<OCSseEvent>()
+        val capturedEvents = mutableListOf<OCEvent>()
+        var connected = false
 
         // when:
         val job = launch {
-            openCodeClient.subscribeSessionEvents(targetSessionId) { event ->
+            openCodeClient.subscribeSessionEvents(targetSessionId, onConnected = { connected = true }) { event ->
                 capturedEvents.add(event)
-                if (event.payload?.properties?.info?.finish == "stop") {
+                if (event.type == "session.execution.succeeded") {
                     this.cancel()
                 }
             }
@@ -183,8 +165,10 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
         withTimeout(4.seconds) { job.join() }
 
         // then:
-        assertThat(capturedEvents).hasSize(2)
-        assertThat(capturedEvents.first().payload?.properties?.sessionID).isEqualTo(targetSessionId)
+        assertThat(connected).isTrue
+        assertThat(capturedEvents).extracting<String> { it.type }
+            .containsExactly("session.execution.started", "session.execution.succeeded")
+        assertThat(capturedEvents).allSatisfy { assertThat(it.data?.sessionID).isEqualTo(targetSessionId) }
     }
 
     @Test
@@ -203,8 +187,9 @@ class OpenCodeClientTest : OpenCodeAgentsIT() {
         assertThat(status).isEqualTo(HttpStatusCode.fromValue(418))
     }
 
-    private fun toSSEBody(vararg events: OCSseEvent): String = buildString {
+    private fun toSSEBody(vararg events: OCEvent): String = buildString {
         events.forEach { event ->
+            append("event: ").append(event.type).append("\n")
             append("data: ").append(jsonMapper.writeValueAsString(event)).append("\n\n")
         }
     }

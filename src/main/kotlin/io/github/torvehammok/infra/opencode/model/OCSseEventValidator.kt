@@ -11,8 +11,8 @@ interface OCSseEventValidator {
 
     companion object : OCSseEventValidator by OCSseEventValidatorImpl()
 
-    @ValidationParamType(OCSseEvent::class)
-    fun checkOCSseEvent(event: JsonNode): ValidationResult<JsonNode>
+    @ValidationParamType(OCEvent::class)
+    fun checkOCEvent(event: JsonNode): ValidationResult<JsonNode>
 
     @ValidationParamType(ConfigMap::class)
     fun checkConfigMap(event: JsonNode): ValidationResult<JsonNode>

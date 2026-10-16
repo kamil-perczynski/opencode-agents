@@ -1,6 +1,8 @@
 package io.github.torvehammok.domain
 
-import io.github.torvehammok.infra.opencode.model.OpenCodeSession
+import io.github.torvehammok.infra.opencode.model.OCData
+import io.github.torvehammok.infra.opencode.model.OCModelRef
+import io.github.torvehammok.infra.opencode.model.OCSession
 import kotlin.random.Random
 
 fun randomAlphanumeric(random: Random, length: Int): String {
@@ -13,14 +15,14 @@ fun nextSessionId(): String {
     return "ses_" + randomAlphanumeric(random, 26)
 }
 
-fun someCreateSessionRequest(): OpenCodeSession {
-    return OpenCodeSession(
-        id = "ses_0ae090e0dffeD2gZw8cFr4DA6K",
-        slug = "snazzy-merman",
-        projectID = "cb1c117ac52a6eb4af57d0b810b330630d776e88",
-        directory = "/app/opencode-agents",
-        path = "",
-        cost = 0.0,
-        title = "New session - 2026-07-10T19:42:35.702Z"
+fun someCreateSessionResponse(): OCData<OCSession> {
+    return OCData(
+        OCSession(
+            id = "ses_0ae090e0dffeD2gZw8cFr4DA6K",
+            agent = "slack-bot",
+            model = OCModelRef(providerID = "opencode-go", id = "deepseek-v4.1-flash"),
+            cost = 0.0,
+            title = "New session - 2026-10-16T19:42:35.702Z"
+        )
     )
 }

@@ -13,9 +13,11 @@ services:
       OPENCODE_CONFIGSYNC_ENABLED: "true"
       OPENCODE_CONFIGSYNC_REPOURL: "git@github.com:org/opencode-config.git"
       OPENCODE_CONFIGSYNC_SSH_PRIVATEKEYPATH: "/run/secrets/ssh-key"
+      OPENCODE_API_KEY: change-me
     volumes:
       - ./secrets/ssh-key:/run/secrets/ssh-key:ro
-      - opencode-data/.ssh:/var/opencode-agents/.ssh
+      - ./opencode-data/.ssh:/var/opencode-agents/.ssh
+      - ./opencode-config:/var/opencode-agents/config
   redis:
     image: redis:8-alpine
     container_name: redis_server

@@ -3,15 +3,17 @@ package io.github.torvehammok.domain
 import io.github.torvehammok.domain.dto.*
 import io.github.torvehammok.infra.opencode.OpenCodeClient
 import io.github.torvehammok.infra.opencode.OpenCodeClientException
-import io.github.torvehammok.infra.opencode.model.OCSseEvent
+import io.github.torvehammok.infra.opencode.model.OCEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
@@ -36,25 +38,28 @@ class OCServerAgent(private val openCodeClient: OpenCodeClient, private val open
         val t0 = System.currentTimeMillis()
 
         var sub = OcAgenticSessionSub(sessionId = "<session_id>") // mutable object
+        var subscription: Job? = null
 
         try {
-            sub = sub.copy(sessionId = openCodeClient.createSession())
-            subscribeToOpenCodeSSE(sub)
-
-            openCodeClient.promptAsync(
-                agent = opencodeProps.agent,
-                prompt = prompt,
-                sessionId = sub.sessionId,
-                modelId = opencodeProps.model
+            sub = sub.copy(
+                sessionId = openCodeClient.createSession(agent = opencodeProps.agent, modelId = opencodeProps.model)
             )
 
             val agentResponse = withTimeout(opencodeProps.maxAgentSessionDurationSeconds.seconds) {
+                subscription = subscribeToOpenCodeSSE(sub)
+
+                // the global event bus is volatile - prompt only once the subscription is live
+                sub.connected.await()
+
+                openCodeClient.prompt(sessionId = sub.sessionId, prompt = prompt)
+
                 sub.response.await()
             }
 
             return agentResponse.copy(duration = toSessionDuration(t0))
         } catch (ex: TimeoutCancellationException) {
             log.info("Session {} has timed out. {}", sub.sessionId, ex.message)
+            interruptQuietly(sub.sessionId)
 
             return OcAgentResponse(
                 response = "The agent did not manage to respond in time. Try again later.",
@@ -71,78 +76,91 @@ class OCServerAgent(private val openCodeClient: OpenCodeClient, private val open
                 toolsInvocations = sub.toolInvocations,
                 duration = toSessionDuration(t0)
             )
+        } finally {
+            subscription?.cancel()
         }
     }
 
-    private fun subscribeToOpenCodeSSE(sub: OcAgenticSessionSub): OcAgenticSessionSub {
-        var lastTextMessage: OCSseEvent? = null
+    private fun subscribeToOpenCodeSSE(sub: OcAgenticSessionSub): Job {
+        var lastText: String? = null
 
-        scope.launch {
-            openCodeClient.subscribeSessionEvents(sub.sessionId) { data ->
-                MDC.put("sessionId", sub.sessionId)
+        return scope.launch {
+            try {
+                openCodeClient.subscribeSessionEvents(
+                    sessionId = sub.sessionId,
+                    onConnected = { sub.connected.complete(Unit) }
+                ) { event ->
+                    MDC.put("sessionId", sub.sessionId)
+                    val data = event.data
 
-                try {
-                    when (data.payload?.type) {
-                        "message.updated", "message.part.updated" -> {
-                            val type = data.payload.properties?.part?.type
-                            val tool = data.payload.properties?.part?.tool
-                            val toolState = data.payload.properties?.part?.state
-                            val cost = data.payload.properties?.part?.cost
-                            val text = data.payload.properties?.part?.text
-                            val info = data.payload.properties?.info
+                    when (event.type) {
+                        "session.tool.input.started" -> log.info("opencode> tool={}", data?.name)
 
-                            if (info?.finish == "stop") {
-                                log.info("Session {} finished successfully", sub.sessionId)
+                        "session.tool.called" -> sub.toolInvocations++
 
-                                val response = OcAgentResponse(
-                                    response = lastTextMessage?.payload?.properties?.part?.text ?: "",
+                        "session.tool.failed" -> log.info("opencode> tool failed: {}", data?.error?.message)
+
+                        "session.text.ended" -> {
+                            log.info("opencode> text={}", data?.text)
+                            lastText = data?.text
+                        }
+
+                        "session.usage.updated" -> {
+                            // running total of the whole session
+                            if (data?.cost != null) {
+                                sub.cost = BigDecimal(data.cost, COST_CONTEXT)
+                            }
+                        }
+
+                        "session.step.failed" -> log.warn("opencode> step failed: {}", data?.error?.message)
+
+                        "session.execution.succeeded" -> {
+                            log.info("Session {} finished successfully", sub.sessionId)
+
+                            sub.response.complete(
+                                OcAgentResponse(
+                                    response = lastText ?: "",
                                     cost = sub.cost,
                                     toolsInvocations = sub.toolInvocations,
                                     duration = Duration.ofMillis(0L).toKotlinDuration()
                                 )
-
-                                sub.response.complete(response)
-                                this.cancel()
-                                return@subscribeSessionEvents
-                            }
-
-                            if (cost != null) {
-                                sub.cost = sub.cost.plus(BigDecimal(cost))
-                            }
-
-                            when (type) {
-                                "tool" if toolState?.status == "running" -> {
-                                    log.info("opencode> {}, state={}", tool, toolState)
-                                    sub.toolInvocations++
-                                }
-
-                                "text" -> {
-                                    log.info("opencode> {}, text={}", type, text)
-                                    lastTextMessage = data
-                                }
-
-                                "reasoning" -> log.debug("opencode> reasoning")
-                                else -> log.trace("opencode> {}", data.payload.properties)
-                            }
+                            )
                         }
 
-                        else -> log.trace("Event: {}", data)
+                        "session.execution.failed" -> sub.response.completeExceptionally(
+                            OpenCodeClientException("Session execution failed: ${data?.error?.message}")
+                        )
+
+                        "session.execution.interrupted" -> sub.response.completeExceptionally(
+                            OpenCodeClientException("Session execution interrupted: ${data?.reason}")
+                        )
+
+                        else -> log.trace("opencode> {}", event)
                     }
-                } catch (ex: CancellationException) {
-                    log.warn("Session {} finished hit a timeout", sub.sessionId, ex)
-                    sub.response.completeExceptionally(ex)
-                    return@subscribeSessionEvents
-                } catch (ex: Exception) {
-                    sub.response.completeExceptionally(ex)
-                    this.cancel()
                 }
+
+                sub.failIfPending(OpenCodeClientException("opencode event stream has ended unexpectedly"))
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                sub.failIfPending(OpenCodeClientException("opencode event stream has failed: ${ex.message}", ex))
             }
         }
+    }
 
-        return sub
+    private suspend fun interruptQuietly(sessionId: String) {
+        try {
+            withContext(NonCancellable) {
+                openCodeClient.interrupt(sessionId)
+            }
+        } catch (ex: Exception) {
+            log.warn("Failed to interrupt session {}: {}", sessionId, ex.message)
+        }
     }
 
 }
+
+private val COST_CONTEXT = MathContext(4, RoundingMode.HALF_UP)
 
 private fun toSessionDuration(startTimeMillis: Long): kotlin.time.Duration {
     return Duration.ofMillis(System.currentTimeMillis() - startTimeMillis).toKotlinDuration()
@@ -150,7 +168,13 @@ private fun toSessionDuration(startTimeMillis: Long): kotlin.time.Duration {
 
 private data class OcAgenticSessionSub(
     val sessionId: String,
-    var cost: BigDecimal = BigDecimal(0, MathContext(4, RoundingMode.HALF_UP)),
+    var cost: BigDecimal = BigDecimal(0, COST_CONTEXT),
     var toolInvocations: Int = 0,
+    val connected: CompletableDeferred<Unit> = CompletableDeferred(),
     val response: CompletableDeferred<OcAgentResponse> = CompletableDeferred()
-)
+) {
+    fun failIfPending(ex: Exception) {
+        connected.completeExceptionally(ex)
+        response.completeExceptionally(ex)
+    }
+}

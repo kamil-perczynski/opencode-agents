@@ -9,12 +9,16 @@ redis:
   url: redis://redis:6379
 
 opencode:
+  model: opencode-go/deepseek-v4.1-flash
+  password: opencode-agents
   server:
     enabled: true
     env:
       custom:
+        OPENCODE_SERVER_PASSWORD: opencode-agents
         OPENCODE_CONFIG_DIR: /var/opencode-agents/config
         OPENCODE_CONFIG: /var/opencode-agents/config/opencode.json
+        OPENCODE_API_KEY: ${OPENCODE_API_KEY}
   configSync:
     enabled: false
     targetDir: "/var/opencode-agents/config"

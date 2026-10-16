@@ -22,15 +22,13 @@ class OpenCodeServerManager(
     private var process: Process? = null
 
     override fun onInit() {
-        if (opencodeProps.server.enabled) {
+        if (opencodeProps.configSync.enabled) {
             sshGitConfigFetcher.gitClone()
-            start()
         }
+        start()
     }
 
     fun start(): Process {
-        check(process == null) { "OpenCode server is already running" }
-
         val command = listOf(
             opencodeProps.opencodeBinary,
             "serve",

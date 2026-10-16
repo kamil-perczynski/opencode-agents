@@ -12,9 +12,9 @@ data class OpenCodeProps(
     @param:JsonPropertyDescription("OpenCode API base URL")
     val baseUrl: String = "http://127.0.0.1:12335",
     @param:JsonPropertyDescription("OpenCode API username")
-    val username: String? = null,
-    @param:JsonPropertyDescription("OpenCode API password")
-    val password: String? = null,
+    val username: String = "opencode",
+    @param:JsonPropertyDescription("OpenCode API password, passed to the spawned server as OPENCODE_SERVER_PASSWORD")
+    val password: String = "opencode-agents",
     @param:JsonPropertyDescription("OpenCode model name")
     val model: String = "opencode/big-pickle",
     @param:JsonPropertyDescription("Connection timeout in milliseconds")

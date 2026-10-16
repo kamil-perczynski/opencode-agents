@@ -21,7 +21,7 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
     ) {
         wiremock.stubFor(
             mappingDef.customize(
-                mapping = post(urlPathEqualTo("/session"))
+                mapping = post(urlPathEqualTo("/api/session"))
                     .willReturn(
                         responseDef.customize(
                             responseDef = status(200).withHeader("Content-Type", "application/json"),
@@ -39,7 +39,7 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
     ) {
         wiremock.stubFor(
             mappingDef.customize(
-                mapping = get(urlPathEqualTo("/global/event"))
+                mapping = get(urlPathEqualTo("/api/event"))
                     .willReturn(
                         responseDef.customize(
                             responseDef = status(200).withHeader("Content-Type", "text/event-stream"),
@@ -51,19 +51,40 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
         )
     }
 
-    fun mockPromptAsync(
+    fun mockPrompt(
         sessionId: String,
         mappingDef: MappingCustomizer = MAPPING_IDENTITY,
         responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY
     ) {
         wiremock.stubFor(
             mappingDef.customize(
-                mapping = post(urlPathEqualTo("/session/${sessionId}/prompt_async"))
+                mapping = post(urlPathEqualTo("/api/session/${sessionId}/prompt"))
                     .willReturn(
                         responseDef.customize(
                             responseDef = status(200)
                                 .withHeader("Content-Type", "application/json")
                                 .withBody("{}"),
+                            jsonMapper = jsonMapper
+                        )
+                    ),
+                jsonMapper = jsonMapper
+            )
+        )
+    }
+
+    fun mockInterrupt(
+        sessionId: String,
+        mappingDef: MappingCustomizer = MAPPING_IDENTITY,
+        responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY
+    ) {
+        wiremock.stubFor(
+            mappingDef.customize(
+                mapping = post(urlPathEqualTo("/api/session/${sessionId}/interrupt"))
+                    .willReturn(
+                        responseDef.customize(
+                            responseDef = status(200)
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("""{"data":{"interrupted":true}}"""),
                             jsonMapper = jsonMapper
                         )
                     ),
@@ -78,7 +99,7 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
     ) {
         wiremock.stubFor(
             mappingDef.customize(
-                mapping = get(urlPathEqualTo("/global/health"))
+                mapping = get(urlPathEqualTo("/api/info"))
                     .willReturn(
                         responseDef.customize(
                             responseDef = status(200).withHeader("Content-Type", "application/json"),

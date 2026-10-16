@@ -5,6 +5,9 @@ import io.github.ktor_batterypack.core.problemdetail.ProblemDetail
 import io.github.torvehammok.domain.dto.OCThread
 import io.github.torvehammok.domain.dto.OCThreadMessage
 import kotlinx.coroutines.runBlocking
+import com.github.tomakehurst.wiremock.client.WireMock.equalToJson
+import com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor
+import com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,21 +32,21 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
             Feel free to use some API to fetch the current weather like wettr
         """.trimIndent()
 
-        // and: session id must match session id in capture_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl
+        // and: session id must match session id in capture_v2_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl
         val sessionId = "ses_0ae090e0dffeD2gZw8cFr4DA6K"
 
         mockOCServerApi.mockCreateSession(
             responseDef = { res, json ->
-                val session = someCreateSessionRequest().copy(id = sessionId)
+                val session = someCreateSessionResponse().let { it.copy(data = it.data.copy(id = sessionId)) }
                 res.withBody(json.writeValueAsString(session))
             }
         )
         mockOCServerApi.mockSessionSSE(
             responseDef = { res, _ ->
-                res.withBody(sseEventsFromResource("./capture_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl"))
+                res.withBody(sseEventsFromResource("./capture_v2_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl"))
             }
         )
-        mockOCServerApi.mockPromptAsync(sessionId)
+        mockOCServerApi.mockPrompt(sessionId)
 
         // when:
 
@@ -69,7 +72,47 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
             """.trimIndent()
         )
         assertThat(response.cost).isZero
+        assertThat(response.toolsInvocations).isEqualTo(1)
         assertThat(response.duration.inWholeMilliseconds).isBetween(0, 1000)
+
+        // and: agent and model are set on the session
+        wiremock.verify(
+            postRequestedFor(urlPathEqualTo("/api/session"))
+                .withRequestBody(equalToJson("""{"agent":"slack-bot","model":{"providerID":"opencode","id":"big-pickle"}}"""))
+        )
+    }
+
+    @Test
+    fun testSessionExecutionFailed(): Unit = runBlocking {
+        // given:
+        val sessionId = nextSessionId()
+
+        mockOCServerApi.mockCreateSession(
+            responseDef = { res, json ->
+                val session = someCreateSessionResponse().let { it.copy(data = it.data.copy(id = sessionId)) }
+                res.withBody(json.writeValueAsString(session))
+            }
+        )
+        mockOCServerApi.mockSessionSSE(
+            responseDef = { res, _ ->
+                res.withBody(
+                    sseEvents(
+                        """{"id":"evt_1","type":"server.connected","data":{}}""",
+                        """{"id":"evt_2","type":"session.execution.started","data":{"sessionID":"$sessionId"}}""",
+                        """{"id":"evt_3","type":"session.usage.updated","data":{"sessionID":"$sessionId","cost":0.0125}}""",
+                        """{"id":"evt_4","type":"session.execution.failed","data":{"sessionID":"$sessionId","error":{"type":"ProviderError","message":"Rate limited"}}}"""
+                    )
+                )
+            }
+        )
+        mockOCServerApi.mockPrompt(sessionId)
+
+        // when:
+        val response = ocServerAgent.run(someOCThread())
+
+        // then:
+        assertThat(response.response).isEqualTo("Oops! The agent has broken down. Rest assured - we will fix it. Just try again later.")
+        assertThat(response.cost).isEqualByComparingTo("0.0125")
     }
 
     @Test
@@ -80,22 +123,23 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
             Feel free to use some API to fetch the current weather like wettr
         """.trimIndent()
 
-        // and: session id must match session id in capture_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl
+        // and: session id must match session id in capture_v2_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl
         val sessionId = "ses_0ae090e0dffeD2gZw8cFr4DA6K"
 
         mockOCServerApi.mockCreateSession(
             responseDef = { res, json ->
-                val session = someCreateSessionRequest().copy(id = sessionId)
+                val session = someCreateSessionResponse().let { it.copy(data = it.data.copy(id = sessionId)) }
                 res.withBody(json.writeValueAsString(session))
             }
         )
         mockOCServerApi.mockSessionSSE(
             responseDef = { res, _ ->
-                res.withBody(sseEventsFromResource("./capture_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl"))
+                res.withBody(sseEventsFromResource("./capture_v2_ses_0ae090e0dffeD2gZw8cFr4DA6K.jsonl"))
                     .withChunkedDribbleDelay(10, 2000)
             }
         )
-        mockOCServerApi.mockPromptAsync(sessionId)
+        mockOCServerApi.mockPrompt(sessionId)
+        mockOCServerApi.mockInterrupt(sessionId)
 
         // when:
         val response = ocServerAgent.run(
@@ -108,6 +152,7 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
         assertThat(response.response).isEqualTo("The agent did not manage to respond in time. Try again later.")
         assertThat(response.cost).isZero
         assertThat(response.duration.inWholeMilliseconds).isGreaterThanOrEqualTo(2000)
+        wiremock.verify(postRequestedFor(urlPathEqualTo("/api/session/$sessionId/interrupt")))
     }
 
     @Test
@@ -121,7 +166,7 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
 
         mockOCServerApi.mockCreateSession(
             responseDef = { res, json ->
-                val session = someCreateSessionRequest().copy(id = sessionId)
+                val session = someCreateSessionResponse().let { it.copy(data = it.data.copy(id = sessionId)) }
                 res.withBody(json.writeValueAsString(session))
             }
         )
@@ -143,7 +188,7 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
             }
         )
 
-        mockOCServerApi.mockPromptAsync(
+        mockOCServerApi.mockPrompt(
             sessionId = sessionId,
             responseDef = { res, json ->
                 res
@@ -180,11 +225,15 @@ private fun sseEventsFromResource(resourceName: String): String {
         .bufferedReader()
         .use { it.readText() }
 
-    return buildString {
-        // Break the file into lines and prepend "data: " to each
-        fileContent.lines().filter { it.isNotBlank() }.forEach { line ->
-            append("data: ").append(line).append("\n").append("\n")
-        }
+    return sseEvents(*fileContent.lines().filter { it.isNotBlank() }.toTypedArray())
+}
+
+private val EVENT_TYPE = Regex(""""type"\s*:\s*"([^"]+)"""")
+
+private fun sseEvents(vararg jsonLines: String): String = buildString {
+    jsonLines.forEach { line ->
+        append("event: ").append(EVENT_TYPE.find(line)!!.groupValues[1]).append("\n")
+        append("data: ").append(line).append("\n\n")
     }
 }
 

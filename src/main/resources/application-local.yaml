@@ -8,9 +8,11 @@ slack:
     - id: C0B783F5CLW
 
 opencode:
-  model: opencode-go/glm-5.2
+  password: opencode-agents
+  model: opencode-go/deepseek-v4.1-flash
   server:
     enabled: true
     env:
       custom:
         GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN}
+        OPENCODE_SERVER_PASSWORD: opencode-agents

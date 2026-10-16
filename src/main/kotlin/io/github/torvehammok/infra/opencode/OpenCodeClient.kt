@@ -17,7 +17,11 @@ import org.koin.core.annotation.Singleton
 import tools.jackson.databind.json.JsonMapper
 import java.util.*
 
+private const val SERVER_CONNECTED = "server.connected"
 
+/**
+ * Client of the opencode v2 server API (https://opencode.ai/v2/docs/api).
+ */
 @Singleton
 class OpenCodeClient(
     @Named("opencode") private val httpClient: HttpClient,
@@ -25,64 +29,71 @@ class OpenCodeClient(
     private val jsonMapper: JsonMapper
 ) {
 
-    suspend fun subscribeSessionEvents(sessionId: String, onEvent: (event: OCSseEvent) -> Unit) {
+    /**
+     * Subscribes to the global (volatile) event bus. [onConnected] is invoked once the server
+     * acknowledges the subscription - events published before that moment are not delivered.
+     */
+    suspend fun subscribeSessionEvents(
+        sessionId: String,
+        onConnected: () -> Unit = {},
+        onEvent: (event: OCEvent) -> Unit
+    ) {
         httpClient.sse(
-            urlString = "/global/event",
-            request = { header(HttpHeaders.ContentType, ContentType.Text.EventStream) },
+            urlString = "/api/event",
+            request = {
+                pathPattern("/api/event")
+                opencodeAuth(opencodeProps)
+                header(HttpHeaders.Accept, ContentType.Text.EventStream)
+            },
         ) {
             incoming.cancellable().collect { serverEvent ->
                 currentCoroutineContext().ensureActive()
 
-                val eventJson = jsonMapper.readValue(serverEvent.data, OCSseEvent::class.java)
-                val eventSessionId = eventJson.payload?.properties?.sessionID
+                val data = serverEvent.data
+                if (data.isNullOrBlank()) {
+                    return@collect
+                }
 
-                if (eventSessionId == sessionId) {
-                    onEvent(eventJson)
+                val event = jsonMapper.readValue(data, OCEvent::class.java)
+
+                if (event.type == SERVER_CONNECTED) {
+                    onConnected()
+                } else if (event.data?.sessionID == sessionId) {
+                    onEvent(event)
                 }
             }
         }
     }
 
-    suspend fun createSession(): String {
+    suspend fun createSession(agent: String, modelId: String): String {
         val response = httpClient.post {
-            pathPattern("/session")
-            url("/session")
+            pathPattern("/api/session")
+            url("/api/session")
             opencodeAuth(opencodeProps)
-            setBody("{}")
             header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody(
+                jsonMapper.writeValueAsString(
+                    OCCreateSessionRequest(agent = agent, model = toModelRef(modelId))
+                )
+            )
         }
 
         if (!response.status.isSuccess()) {
             throw OpenCodeClientException("Failed to open new session")
         }
 
-        val body = response.body<OpenCodeSession>()
+        val body = response.body<OCData<OCSession>>()
 
-        return body.id
+        return body.data.id
     }
 
-    suspend fun promptAsync(agent: String, prompt: String, sessionId: String, modelId: String) {
-        val split = modelId.split("/")
-        val providerId = split[0]
-        val model = split[1]
-
+    suspend fun prompt(sessionId: String, prompt: String) {
         val response = httpClient.post {
-            url("/session/$sessionId/prompt_async")
-            pathPattern("/session/{sessionId}/prompt_async")
+            url("/api/session/$sessionId/prompt")
+            pathPattern("/api/session/{sessionId}/prompt")
             opencodeAuth(opencodeProps)
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody(
-                jsonMapper.writeValueAsString(
-                    OCPromptAsyncRequest(
-                        agent = agent,
-                        parts = listOf(OCPromptPart(type = "text", text = prompt)),
-                        model = OCPromptModel(
-                            providerID = providerId,
-                            modelID = model
-                        )
-                    )
-                )
-            )
+            setBody(jsonMapper.writeValueAsString(OCPromptRequest(text = prompt)))
         }
 
         if (!response.status.isSuccess()) {
@@ -90,10 +101,22 @@ class OpenCodeClient(
         }
     }
 
+    suspend fun interrupt(sessionId: String) {
+        val response = httpClient.post {
+            url("/api/session/$sessionId/interrupt")
+            pathPattern("/api/session/{sessionId}/interrupt")
+            opencodeAuth(opencodeProps)
+        }
+
+        if (!response.status.isSuccess()) {
+            throw OpenCodeClientException("Failed to interrupt session")
+        }
+    }
+
     suspend fun fetchHealthcheckStatus(): HttpStatusCode {
         val response = httpClient.get {
-            pathPattern("/global/health")
-            url("/global/health")
+            pathPattern("/api/info")
+            url("/api/info")
             opencodeAuth(opencodeProps)
             attributes.put(DisableLogging, true)
         }
@@ -103,11 +126,16 @@ class OpenCodeClient(
 
 }
 
+private fun toModelRef(modelId: String): OCModelRef {
+    val split = modelId.split("/", limit = 2)
+    require(split.size == 2) { "Model id must be in format <provider>/<model>, got: $modelId" }
+
+    return OCModelRef(providerID = split[0], id = split[1])
+}
+
 private fun HttpRequestBuilder.opencodeAuth(opencodeProps: OpenCodeProps) {
-    if (opencodeProps.password != null) {
-        headers {
-            append("Authorization", javaBasicAuthHeader(opencodeProps.username ?: "username", opencodeProps.password))
-        }
+    headers {
+        append("Authorization", javaBasicAuthHeader(opencodeProps.username, opencodeProps.password))
     }
 }
 

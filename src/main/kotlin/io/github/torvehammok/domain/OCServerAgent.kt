@@ -26,6 +26,9 @@ import kotlin.time.toKotlinDuration
 private val log = LoggerFactory.getLogger(OCServerAgent::class.java)
 
 private const val TIMEOUT_RESPONSE = "The agent did not manage to respond in time. Try again later."
+private const val RESUMABLE_TIMEOUT_RESPONSE = """⏳ I ran out of time and paused before finishing.
+
+Everything I have found so far is kept. Mention me in this thread with `continue` to pick up where I left off, or ask a narrower question to get a faster answer."""
 private const val BROKEN_RESPONSE = "Oops! The agent has broken down. Rest assured - we will fix it. Just try again later."
 private const val STALLED_RESPONSE = "The agent got stuck and has been stopped. Try again in a minute."
 
@@ -73,11 +76,7 @@ class OCServerAgent(
             return when (outcome) {
                 is TurnOutcome.Succeeded -> OcAgentRun(
                     response = toResponse(turn, outcome.text, t0),
-                    session = ThreadSession(
-                        sessionId = turn.sessionId,
-                        lastTs = latestTs(conversation) ?: conversation.threadTs,
-                        costTotal = turn.cost
-                    )
+                    session = toThreadSession(turn, conversation)
                 )
 
                 is TurnOutcome.Failed -> {
@@ -99,7 +98,12 @@ class OCServerAgent(
             log.info("Session {} has timed out. {}", turn.sessionId, ex.message)
             interruptQuietly(turn.sessionId)
 
-            return OcAgentRun(toResponse(turn, TIMEOUT_RESPONSE, t0), session = null)
+            // the interrupted session keeps its work - the next message in the thread continues it
+            // (a session still running despite the interrupt is replaced by a new one, see openTurn)
+            if (turn.promptSentAt == null) {
+                return OcAgentRun(toResponse(turn, TIMEOUT_RESPONSE, t0), session = null)
+            }
+            return OcAgentRun(toResponse(turn, RESUMABLE_TIMEOUT_RESPONSE, t0), session = toThreadSession(turn, conversation))
         } catch (ex: OpenCodeClientException) {
             log.warn("Session {} has been aborted due to opencode server error: {}", turn.sessionId, ex.message, ex)
 
@@ -326,6 +330,14 @@ private fun toOutcome(messages: List<OCSessionMessage>, turn: SessionTurn): Turn
         ?.text
 
     return TurnOutcome.Succeeded(text ?: turn.lastText() ?: "")
+}
+
+private fun toThreadSession(turn: SessionTurn, conversation: OCThread): ThreadSession {
+    return ThreadSession(
+        sessionId = turn.sessionId,
+        lastTs = latestTs(conversation) ?: conversation.threadTs,
+        costTotal = turn.cost
+    )
 }
 
 private fun toResponse(turn: SessionTurn, response: String, startTimeMillis: Long): OcAgentResponse {

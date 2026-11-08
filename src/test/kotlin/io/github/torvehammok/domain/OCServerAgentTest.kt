@@ -613,17 +613,49 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
         mockOCServerApi.mockInterrupt(sessionId)
 
         // when:
-        val response = runInNewSession(
+        val run = ocServerAgent.run(
             someOCThread().copy(
                 messages = listOf(someOCThreadMessage().copy(text = question))
-            )
+            ),
+            previous = null
         )
 
-        // then:
-        assertThat(response.response).isEqualTo("The agent did not manage to respond in time. Try again later.")
+        // then: the user is told how to resume
+        val response = run.response
+        assertThat(response.response)
+            .startsWith("⏳ I ran out of time")
+            .contains("Mention me in this thread with `continue`")
         assertThat(response.cost).isZero
         assertThat(response.duration.inWholeMilliseconds).isGreaterThanOrEqualTo(2000)
         wiremock.verify(postRequestedFor(urlPathEqualTo("/api/session/$sessionId/interrupt")))
+
+        // and: the interrupted session is kept, so the next message in the thread resumes it
+        assertThat(run.session?.sessionId).isEqualTo(sessionId)
+    }
+
+    @Test
+    fun testResumesTimedOutSessionWithNextMessage(): Unit = runBlocking {
+        // given: the previous turn timed out, the user replies "continue"
+        val sessionId = nextSessionId()
+        val previous = ThreadSession(sessionId = sessionId, lastTs = "100.000003", costTotal = BigDecimal.ZERO)
+        val thread = threadWithHistory().copy(
+            messages = threadWithHistory().messages.take(3) +
+                OCThreadMessage(text = "<@UBOT> continue", ts = "100.000020", user = "U1", isBot = false)
+        )
+
+        mockOCServerApi.mockActiveSessions()
+        mockOCServerApi.mockPrompt(sessionId)
+        mockOCServerApi.mockSessionSSE(responseDef = { res, _ -> res.withBody(succeededEvents(sessionId, "finished")) })
+
+        // when:
+        val run = ocServerAgent.run(thread, previous)
+
+        // then: the same session continues with just the new message
+        assertThat(run.response.response).isEqualTo("finished")
+        wiremock.verify(0, postRequestedFor(urlPathEqualTo("/api/session")))
+
+        val prompt = mockOCServerApi.findRequests<OCPromptRequest>(urlEqualTo("/api/session/$sessionId/prompt")).single().text
+        assertThat(prompt).contains("continue").doesNotContain("first question", "colleague comment")
     }
 
     @Test

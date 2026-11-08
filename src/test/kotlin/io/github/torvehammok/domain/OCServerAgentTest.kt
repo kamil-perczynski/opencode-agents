@@ -116,6 +116,41 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
     }
 
     @Test
+    fun testCodeModeExecuteToolCall(): Unit = runBlocking {
+        // given:
+        val sessionId = nextSessionId()
+        val code = """await tools.github.search_code({ q: \"OCServerAgent\" })"""
+
+        mockOCServerApi.mockCreateSession(
+            responseDef = { res, json ->
+                val session = someCreateSessionResponse().let { it.copy(data = it.data.copy(id = sessionId)) }
+                res.withBody(json.writeValueAsString(session))
+            }
+        )
+        mockOCServerApi.mockSessionSSE(
+            responseDef = { res, _ ->
+                res.withBody(
+                    sseEvents(
+                        """{"id":"evt_1","type":"server.connected","data":{}}""",
+                        """{"id":"evt_2","type":"session.tool.input.started","data":{"sessionID":"$sessionId","id":"call_1","name":"execute"}}""",
+                        """{"id":"evt_3","type":"session.tool.called","data":{"sessionID":"$sessionId","id":"call_1","input":{"code":"$code"},"executed":true}}""",
+                        """{"id":"evt_4","type":"session.text.ended","data":{"sessionID":"$sessionId","text":"done"}}""",
+                        """{"id":"evt_5","type":"session.execution.succeeded","data":{"sessionID":"$sessionId"}}"""
+                    )
+                )
+            }
+        )
+        mockOCServerApi.mockPrompt(sessionId)
+
+        // when:
+        val response = ocServerAgent.run(someOCThread())
+
+        // then:
+        assertThat(response.response).isEqualTo("done")
+        assertThat(response.toolsInvocations).isEqualTo(1)
+    }
+
+    @Test
     fun testAgentSessionTimeout(): Unit = runBlocking {
         // given:
         val question = """

@@ -83,6 +83,8 @@ class OCServerAgent(private val openCodeClient: OpenCodeClient, private val open
 
     private fun subscribeToOpenCodeSSE(sub: OcAgenticSessionSub): Job {
         var lastText: String? = null
+        // `session.tool.called` carries the input but not the name - it is only on `session.tool.input.started`
+        val toolNames = mutableMapOf<String, String>()
 
         return scope.launch {
             try {
@@ -94,9 +96,24 @@ class OCServerAgent(private val openCodeClient: OpenCodeClient, private val open
                     val data = event.data
 
                     when (event.type) {
-                        "session.tool.input.started" -> log.info("opencode> tool={}", data?.name)
+                        "session.tool.input.started" -> {
+                            log.info("opencode> tool={}", data?.name)
 
-                        "session.tool.called" -> sub.toolInvocations++
+                            val callId = data?.id
+                            val name = data?.name
+                            if (callId != null && name != null) {
+                                toolNames[callId] = name
+                            }
+                        }
+
+                        "session.tool.called" -> {
+                            sub.toolInvocations++
+
+                            if (toolNames.remove(data?.id) == CODE_MODE_TOOL) {
+                                val code = data?.input?.get("code") as? String ?: ""
+                                extractCodeModeCalls(code).forEach { log.info("opencode> tool={} (via {})", it, CODE_MODE_TOOL) }
+                            }
+                        }
 
                         "session.tool.failed" -> log.info("opencode> tool failed: {}", data?.error?.message)
 

@@ -22,7 +22,8 @@ data class OCEventData(
     val finish: String? = null,
     val cost: Double? = null,
     val error: OCStructuredError? = null,
-    val reason: String? = null
+    val reason: String? = null,
+    val input: Map<String, Any?>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

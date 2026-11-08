@@ -508,6 +508,70 @@ class OCServerAgentTest : OpenCodeAgentsIT() {
         assertThat(run.session).isNull()
     }
 
+    @Test
+    fun testEstimatesCostFromTokensWhenProviderReportsNone(): Unit = runBlocking {
+        // given: a subscription provider reports cost 0
+        val sessionId = nextSessionId()
+        mockSession(sessionId)
+        mockOCServerApi.mockSessionSSE(
+            responseDef = { res, _ -> res.withBody(usageEvents(sessionId, cost = "0", input = 3648, cacheRead = 779904)) }
+        )
+
+        // when:
+        val run = agentWithPricing(DEEPSEEK_FLASH_PRICING).run(someOCThread(), previous = null)
+
+        // then: estimated at list price
+        assertThat(run.response.cost).isEqualByComparingTo("0.003043")
+        assertThat(run.session?.costTotal).isEqualByComparingTo("0.003043")
+    }
+
+    @Test
+    fun testReportedCostWinsOverEstimate(): Unit = runBlocking {
+        // given:
+        val sessionId = nextSessionId()
+        mockSession(sessionId)
+        mockOCServerApi.mockSessionSSE(
+            responseDef = { res, _ -> res.withBody(usageEvents(sessionId, cost = "0.0125", input = 3648, cacheRead = 779904)) }
+        )
+
+        // when:
+        val run = agentWithPricing(DEEPSEEK_FLASH_PRICING).run(someOCThread(), previous = null)
+
+        // then:
+        assertThat(run.response.cost).isEqualByComparingTo("0.0125")
+    }
+
+    @Test
+    fun testEstimatedCostOfReusedSessionCoversThisTurnOnly(): Unit = runBlocking {
+        // given: the previous turns of the thread were estimated at 0.002
+        val sessionId = nextSessionId()
+        val previous = ThreadSession(sessionId = sessionId, lastTs = "100.000002", costTotal = BigDecimal("0.002"))
+
+        mockOCServerApi.mockActiveSessions()
+        mockOCServerApi.mockPrompt(sessionId)
+        mockOCServerApi.mockSessionSSE(
+            responseDef = { res, _ -> res.withBody(usageEvents(sessionId, cost = "0", input = 3648, cacheRead = 779904)) }
+        )
+
+        // when:
+        val run = agentWithPricing(DEEPSEEK_FLASH_PRICING).run(threadWithHistory(), previous)
+
+        // then:
+        assertThat(run.response.cost).isEqualByComparingTo("0.001043")
+        assertThat(run.session?.costTotal).isEqualByComparingTo("0.003043")
+    }
+
+    private fun agentWithPricing(pricing: ModelPricing): OCServerAgent {
+        return OCServerAgent(
+            openCodeClient = application.koin().get(),
+            opencodeProps = application.koin().get(),
+            openCodeHealth = openCodeHealth,
+            modelPricingProvider = object : ModelPricingProvider {
+                override suspend fun findPricing(modelId: String): ModelPricing = pricing
+            }
+        )
+    }
+
     private suspend fun runInNewSession(thread: OCThread): OcAgentResponse {
         return ocServerAgent.run(thread, previous = null).response
     }
@@ -638,6 +702,21 @@ private fun sseEventsFromResource(resourceName: String): String {
 private val EVENT_TYPE = Regex(""""type"\s*:\s*"([^"]+)"""")
 
 private fun heartbeats(count: Int): String = ": heartbeat\n\n".repeat(count)
+
+private val DEEPSEEK_FLASH_PRICING = ModelPricing(
+    input = BigDecimal("0.15"),
+    output = BigDecimal("0.6"),
+    cacheRead = BigDecimal("0.003"),
+    cacheWrite = BigDecimal.ZERO
+)
+
+// with output 252 and reasoning 8: 3648 input + 779904 cache read cost 0.003042912 at DEEPSEEK_FLASH_PRICING
+private fun usageEvents(sessionId: String, cost: String, input: Long, cacheRead: Long): String = sseEvents(
+    """{"id":"evt_1","type":"server.connected","data":{}}""",
+    """{"id":"evt_2","type":"session.usage.updated","data":{"sessionID":"$sessionId","cost":$cost,"tokens":{"input":$input,"output":252,"reasoning":8,"cache":{"read":$cacheRead,"write":0}}}}""",
+    """{"id":"evt_3","type":"session.text.ended","data":{"sessionID":"$sessionId","text":"answer"}}""",
+    """{"id":"evt_4","type":"session.execution.succeeded","data":{"sessionID":"$sessionId"}}"""
+)
 
 private fun succeededEvents(sessionId: String, text: String): String = sseEvents(
     """{"id":"evt_1","type":"server.connected","data":{}}""",

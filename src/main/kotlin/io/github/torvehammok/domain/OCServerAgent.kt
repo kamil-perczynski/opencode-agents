@@ -36,7 +36,8 @@ private const val RECONCILE_GRACE_MS = 5_000L
 class OCServerAgent(
     private val openCodeClient: OpenCodeClient,
     private val opencodeProps: OpenCodeProps,
-    private val openCodeHealth: OpenCodeHealth
+    private val openCodeHealth: OpenCodeHealth,
+    private val modelPricingProvider: ModelPricingProvider
 ) {
 
     private val watchdogProps get() = opencodeProps.watchdog
@@ -51,7 +52,8 @@ class OCServerAgent(
         var turn = SessionTurn(sessionId = previous?.sessionId ?: "<session_id>")
 
         try {
-            turn = openTurn(previous)
+            val pricing = modelPricingProvider.findPricing(opencodeProps.model)
+            turn = openTurn(previous, pricing)
 
             val outcome = withTimeout(opencodeProps.maxAgentSessionDurationSeconds.seconds) {
                 try {
@@ -61,7 +63,7 @@ class OCServerAgent(
                         throw ex
                     }
                     log.warn("Session {} no longer exists, starting a new one", turn.sessionId)
-                    turn = newTurn()
+                    turn = newTurn(pricing)
                     runTurn(turn, toPrompt(conversation, previous = null, reused = false))
                 }
             }
@@ -109,25 +111,30 @@ class OCServerAgent(
      * A session still running (e.g. its interrupt has failed) must not be prompted - the prompt would steer
      * that execution instead of starting a new one.
      */
-    private suspend fun openTurn(previous: ThreadSession?): SessionTurn {
+    private suspend fun openTurn(previous: ThreadSession?, pricing: ModelPricing?): SessionTurn {
         if (previous == null) {
-            return newTurn()
+            return newTurn(pricing)
         }
 
         val active = fetchActiveSessionIdsOrNull()
         if (active != null && previous.sessionId !in active) {
             log.info("Reusing session {} of the thread", previous.sessionId)
-            return SessionTurn(sessionId = previous.sessionId, baseCost = previous.costTotal, reused = true)
+            return SessionTurn(
+                sessionId = previous.sessionId,
+                baseCost = previous.costTotal,
+                reused = true,
+                pricing = pricing
+            )
         }
 
         log.warn("Session {} of the thread is still running or its state is unknown, starting a new one", previous.sessionId)
-        return newTurn()
+        return newTurn(pricing)
     }
 
-    private suspend fun newTurn(): SessionTurn {
+    private suspend fun newTurn(pricing: ModelPricing?): SessionTurn {
         val sessionId = openCodeClient.createSession(agent = opencodeProps.agent, modelId = opencodeProps.model)
         log.info("Created session {}", sessionId)
-        return SessionTurn(sessionId = sessionId)
+        return SessionTurn(sessionId = sessionId, pricing = pricing)
     }
 
     private fun toPrompt(conversation: OCThread, previous: ThreadSession?, reused: Boolean): String {

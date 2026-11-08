@@ -49,6 +49,8 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    // opencode exports OPENCODE=1 to its shells; the env-first config loader would read it as the whole `opencode:` section
+    environment.remove("OPENCODE")
 }
 
 ktorBatterypack {

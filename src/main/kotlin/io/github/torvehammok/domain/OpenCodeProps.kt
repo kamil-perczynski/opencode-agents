@@ -34,6 +34,8 @@ data class OpenCodeProps(
     """.trimIndent(),
     @param:JsonPropertyDescription("Maximum agent session duration in seconds")
     val maxAgentSessionDurationSeconds: Long = 180,
+    @param:JsonPropertyDescription("A Slack thread keeps its opencode session for this long since its last message, in seconds")
+    val threadSessionTtlSeconds: Long = 86_400,
     @param:JsonPropertyDescription("Stalled session detection and opencode server supervision")
     val watchdog: OpenCodeWatchdogProps = OpenCodeWatchdogProps(),
     @param:JsonPropertyDescription("Configuration synchronization")
@@ -43,4 +45,4 @@ data class OpenCodeProps(
 /**
  * Thread lock TTL - must outlive the longest agent session, so a second message cannot start a parallel run.
  */
-fun OpenCodeProps.lockTtlSeconds(): Long = maxAgentSessionDurationSeconds + 30
+fun lockTtlSeconds(opencodeProps: OpenCodeProps): Long = opencodeProps.maxAgentSessionDurationSeconds + 30

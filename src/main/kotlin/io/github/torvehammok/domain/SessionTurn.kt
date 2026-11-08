@@ -24,10 +24,21 @@ internal sealed interface TurnOutcome {
 /**
  * State of a single prompt round-trip on an opencode session.
  */
-internal class SessionTurn(val sessionId: String) {
+internal class SessionTurn(
+    val sessionId: String,
+    /** session cost before this turn - opencode reports a running total of the whole session */
+    private val baseCost: BigDecimal = BigDecimal.ZERO,
+    /** session kept from a previous turn of the thread */
+    val reused: Boolean = false
+) {
 
-    var cost: BigDecimal = BigDecimal(0, COST_CONTEXT)
+    /** running cost of the whole session */
+    var cost: BigDecimal = baseCost
     var toolInvocations: Int = 0
+
+    /** user message created by this turn's prompt - older messages belong to previous turns */
+    @Volatile
+    var promptMessageId: String? = null
 
     val connected = CompletableDeferred<Unit>()
     val outcome = CompletableDeferred<TurnOutcome>()
@@ -87,6 +98,8 @@ internal class SessionTurn(val sessionId: String) {
     }
 
     fun lastText(): String? = lastText
+
+    fun turnCost(): BigDecimal = (cost - baseCost).max(BigDecimal.ZERO)
 
     fun handle(event: OCEvent) {
         MDC.put("sessionId", sessionId)

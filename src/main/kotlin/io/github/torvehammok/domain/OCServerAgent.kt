@@ -4,6 +4,7 @@ import io.github.torvehammok.domain.dto.*
 import io.github.torvehammok.infra.opencode.OpenCodeClient
 import io.github.torvehammok.infra.opencode.OpenCodeClientException
 import io.github.torvehammok.infra.opencode.OpenCodeHealth
+import io.github.torvehammok.infra.opencode.OpenCodeSessionNotFoundException
 import io.github.torvehammok.infra.opencode.model.OCSessionMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -40,28 +41,46 @@ class OCServerAgent(
 
     private val watchdogProps get() = opencodeProps.watchdog
 
-    suspend fun run(conversation: OCThread): OcAgentResponse {
-        val prompt = opencodeProps.prompt.trimIndent() + "\n" + toXml(conversation)
-
+    /**
+     * Runs the agent on the thread, reusing the thread's [previous] session when possible - then only
+     * the messages it has not seen yet are sent. The returned session is null when it must not be reused.
+     */
+    suspend fun run(conversation: OCThread, previous: ThreadSession?): OcAgentRun {
         val t0 = System.currentTimeMillis()
 
-        var turn = SessionTurn(sessionId = "<session_id>")
+        var turn = SessionTurn(sessionId = previous?.sessionId ?: "<session_id>")
 
         try {
-            turn = SessionTurn(
-                sessionId = openCodeClient.createSession(agent = opencodeProps.agent, modelId = opencodeProps.model)
-            )
+            turn = openTurn(previous)
 
             val outcome = withTimeout(opencodeProps.maxAgentSessionDurationSeconds.seconds) {
-                runTurn(turn, prompt)
+                try {
+                    runTurn(turn, toPrompt(conversation, previous, turn.reused))
+                } catch (ex: OpenCodeSessionNotFoundException) {
+                    if (!turn.reused) {
+                        throw ex
+                    }
+                    log.warn("Session {} no longer exists, starting a new one", turn.sessionId)
+                    turn = newTurn()
+                    runTurn(turn, toPrompt(conversation, previous = null, reused = false))
+                }
             }
 
+            log.info("Session {} turn finished, reused={}, outcome={}", turn.sessionId, turn.reused, outcome::class.simpleName)
+
             return when (outcome) {
-                is TurnOutcome.Succeeded -> turn.toResponse(outcome.text, t0)
+                is TurnOutcome.Succeeded -> OcAgentRun(
+                    response = toResponse(turn, outcome.text, t0),
+                    session = ThreadSession(
+                        sessionId = turn.sessionId,
+                        lastTs = latestTs(conversation) ?: conversation.threadTs,
+                        costTotal = turn.cost
+                    )
+                )
 
                 is TurnOutcome.Failed -> {
                     log.warn("Session {} has failed: {}", turn.sessionId, outcome.reason)
-                    turn.toResponse(BROKEN_RESPONSE, t0)
+                    OcAgentRun(toResponse(turn, BROKEN_RESPONSE, t0), session = null)
                 }
 
                 is TurnOutcome.Stalled -> {
@@ -71,19 +90,51 @@ class OCServerAgent(
                     )
                     interruptQuietly(turn.sessionId)
                     openCodeHealth.reportStall(turn.sessionId)
-                    turn.toResponse(STALLED_RESPONSE, t0)
+                    OcAgentRun(toResponse(turn, STALLED_RESPONSE, t0), session = null)
                 }
             }
         } catch (ex: TimeoutCancellationException) {
             log.info("Session {} has timed out. {}", turn.sessionId, ex.message)
             interruptQuietly(turn.sessionId)
 
-            return turn.toResponse(TIMEOUT_RESPONSE, t0)
+            return OcAgentRun(toResponse(turn, TIMEOUT_RESPONSE, t0), session = null)
         } catch (ex: OpenCodeClientException) {
             log.warn("Session {} has been aborted due to opencode server error: {}", turn.sessionId, ex.message, ex)
 
-            return turn.toResponse(BROKEN_RESPONSE, t0)
+            return OcAgentRun(toResponse(turn, BROKEN_RESPONSE, t0), session = null)
         }
+    }
+
+    /**
+     * A session still running (e.g. its interrupt has failed) must not be prompted - the prompt would steer
+     * that execution instead of starting a new one.
+     */
+    private suspend fun openTurn(previous: ThreadSession?): SessionTurn {
+        if (previous == null) {
+            return newTurn()
+        }
+
+        val active = fetchActiveSessionIdsOrNull()
+        if (active != null && previous.sessionId !in active) {
+            log.info("Reusing session {} of the thread", previous.sessionId)
+            return SessionTurn(sessionId = previous.sessionId, baseCost = previous.costTotal, reused = true)
+        }
+
+        log.warn("Session {} of the thread is still running or its state is unknown, starting a new one", previous.sessionId)
+        return newTurn()
+    }
+
+    private suspend fun newTurn(): SessionTurn {
+        val sessionId = openCodeClient.createSession(agent = opencodeProps.agent, modelId = opencodeProps.model)
+        log.info("Created session {}", sessionId)
+        return SessionTurn(sessionId = sessionId)
+    }
+
+    private fun toPrompt(conversation: OCThread, previous: ThreadSession?, reused: Boolean): String {
+        if (reused && previous != null) {
+            return toXml(conversation.copy(messages = messagesAfter(conversation, previous.lastTs)))
+        }
+        return opencodeProps.prompt.trimIndent() + "\n" + toXml(conversation)
     }
 
     private suspend fun runTurn(turn: SessionTurn, prompt: String): TurnOutcome = coroutineScope {
@@ -94,7 +145,7 @@ class OCServerAgent(
             withTimeoutOrNull(watchdogProps.eventStreamConnectTimeoutMs) { turn.connected.await() }
                 ?: throw OpenCodeClientException("opencode event stream did not connect in time")
 
-            openCodeClient.prompt(sessionId = turn.sessionId, prompt = prompt)
+            turn.promptMessageId = openCodeClient.prompt(sessionId = turn.sessionId, prompt = prompt)
 
             val now = System.currentTimeMillis()
             turn.promptSentAt = now
@@ -249,16 +300,20 @@ class OCServerAgent(
 
 /**
  * Messages are newest first: the `idle` entry closes the last execution, preceded by the final `assistant` message.
+ * Only messages newer than this turn's prompt count - older ones belong to previous turns of a reused session.
  */
 private fun toOutcome(messages: List<OCSessionMessage>, turn: SessionTurn): TurnOutcome {
-    val idle = messages.firstOrNull { it.type == "idle" }
-        ?: return TurnOutcome.Failed("Session is idle, but its outcome is unknown")
+    val promptMessageId = turn.promptMessageId
+    val turnMessages = if (promptMessageId != null) messages.takeWhile { it.id != promptMessageId } else messages
+
+    val idle = turnMessages.firstOrNull { it.type == "idle" }
+        ?: return TurnOutcome.Failed("Session is idle, but the outcome of this turn is unknown")
 
     if (idle.outcome != "succeeded") {
         return TurnOutcome.Failed("Session execution ended with outcome ${idle.outcome}")
     }
 
-    val text = messages.firstOrNull { it.type == "assistant" }
+    val text = turnMessages.firstOrNull { it.type == "assistant" }
         ?.content
         ?.lastOrNull { it.type == "text" }
         ?.text
@@ -266,11 +321,11 @@ private fun toOutcome(messages: List<OCSessionMessage>, turn: SessionTurn): Turn
     return TurnOutcome.Succeeded(text ?: turn.lastText() ?: "")
 }
 
-private fun SessionTurn.toResponse(response: String, startTimeMillis: Long): OcAgentResponse {
+private fun toResponse(turn: SessionTurn, response: String, startTimeMillis: Long): OcAgentResponse {
     return OcAgentResponse(
         response = response,
-        cost = cost,
-        toolsInvocations = toolInvocations,
+        cost = turn.turnCost(),
+        toolsInvocations = turn.toolInvocations,
         duration = toSessionDuration(startTimeMillis)
     )
 }

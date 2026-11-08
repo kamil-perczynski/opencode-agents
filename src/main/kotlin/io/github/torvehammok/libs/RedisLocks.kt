@@ -3,10 +3,19 @@
 package io.github.torvehammok.libs
 
 import io.lettuce.core.ExperimentalLettuceCoroutinesApi
+import io.lettuce.core.SetArgs
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.coroutines
 
 class RedisLocks(private val redisConnection: StatefulRedisConnection<String, String>) {
+
+    /**
+     * Atomically acquires the lock. Returns false when it is already held.
+     */
+    suspend fun tryLock(channelId: String, ts: String, ttlSeconds: Long): Boolean {
+        val key = toLockKey(channelId, ts)
+        return redisConnection.coroutines().set(key, "1", SetArgs().nx().ex(ttlSeconds)) != null
+    }
 
     suspend fun setLock(channelId: String, ts: String, ttlSeconds: Long) {
         val key = toLockKey(channelId, ts)

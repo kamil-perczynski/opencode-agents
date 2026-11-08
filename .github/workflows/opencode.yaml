@@ -40,7 +40,8 @@ jobs:
           git config user.name "opencode-agent[bot]"
           git config user.email "opencode-agent[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
-          git commit --allow-empty -m "opencode: start work on #${ISSUE}"
+          # [skip ci] keeps CI from running on the empty draft PR; the real commit below runs it
+          git commit --allow-empty -m "opencode: start work on #${ISSUE} [skip ci]"
           git push -u origin "$BRANCH"
           pr=$(gh pr create --draft --head "$BRANCH" --title "$ISSUE_TITLE" --body "Closes #${ISSUE}")
           gh issue comment "$ISSUE" --body "opencode is working on this in $pr ([run]($RUN_URL))"
@@ -49,26 +50,28 @@ jobs:
         run: |-
           curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+      # opencode github run picks its behaviour from the triggering event. Hand it a pull_request event for the
+      # draft PR, so it works on that branch: commits, pushes and comments its answer on the PR
+      - name: Prepare pull_request event
+        run: |-
+          gh api "repos/${GH_REPO}/pulls/${PR_URL##*/}" |
+            jq '{action: "opened", number, pull_request: ., repository: .base.repo, sender: .user}' > "$RUNNER_TEMP/pr-event.json"
       - name: Run opencode
         env:
           GH_TOKEN: ""
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: |-
-          prompt="Implement GitHub issue #${ISSUE}: ${ISSUE_TITLE}
+          MODEL: opencode-go/deepseek-v4.1-flash
+          PROMPT: |-
+            Implement GitHub issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
 
-          ${ISSUE_BODY}
-
-          Make the changes in this repository. Don't commit, push or open pull requests; that is done for you."
-          opencode run --auto --model opencode-go/deepseek-v4.1-flash "$prompt" 2>&1 | awk -f .github/opencode-log-filter.awk
-      - name: Push changes
+            ${{ github.event.issue.body }}
+        # Set inline: a step's env can't override GITHUB_* variables
         run: |-
-          git add -A
-          if git diff --cached --quiet; then
-            gh pr comment "$PR_URL" --body "opencode finished without changes ([run]($RUN_URL))"
-          else
-            git commit -m "opencode: implement #${ISSUE}"
-            git push
+          GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$RUNNER_TEMP/pr-event.json" opencode github run 2>&1 |
+            awk -f .github/opencode-log-filter.awk
+      - name: Mark ready for review
+        run: |-
+          if [ "$(gh pr view "$PR_URL" --json commits --jq '.commits | length')" -gt 1 ]; then
             gh pr ready "$PR_URL"
           fi
       - name: Report failure

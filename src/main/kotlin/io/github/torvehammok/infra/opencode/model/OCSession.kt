@@ -32,3 +32,20 @@ data class OCCreateSessionRequest(
 data class OCPromptRequest(
     val text: String
 )
+
+/**
+ * Entry of `GET /api/session/{sessionID}/message`, e.g. `user`, `assistant` or `idle` (end of an execution).
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCSessionMessage(
+    val id: String? = null,
+    val type: String? = null,
+    val outcome: String? = null,
+    val content: List<OCSessionMessageContent>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCSessionMessageContent(
+    val type: String? = null,
+    val text: String? = null
+)

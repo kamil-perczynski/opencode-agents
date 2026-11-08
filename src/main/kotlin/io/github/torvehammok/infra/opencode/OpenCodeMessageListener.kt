@@ -3,7 +3,11 @@ package io.github.torvehammok.infra.opencode
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.domain.OCServerAgent
+import io.github.torvehammok.domain.OpenCodeProps
+import io.github.torvehammok.domain.dto.OcAgentResponse
+import io.github.torvehammok.domain.lockTtlSeconds
 import io.github.torvehammok.libs.RedisLocks
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,15 +15,20 @@ import kotlinx.coroutines.launch
 import org.koin.core.annotation.Singleton
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
+import java.math.BigDecimal
+import kotlin.time.Duration
 
 private val log = LoggerFactory.getLogger(OpenCodeMessageListener::class.java)
+
+private const val UNEXPECTED_FAILURE_RESPONSE = "Oops! Something went wrong on our side. Just try again later."
 
 @Singleton
 class OpenCodeMessageListener(
     private val redisStreamPublisher: RedisStreamPublisher,
     private val serverAgent: OCServerAgent,
     private val jsonMapper: JsonMapper,
-    private val redisLocks: RedisLocks
+    private val redisLocks: RedisLocks,
+    private val opencodeProps: OpenCodeProps
 ) : RedisStreamListener {
 
     private val scope = CoroutineScope(Dispatchers.Default + CoroutineName("SlackMessageListener"))
@@ -41,9 +50,22 @@ class OpenCodeMessageListener(
                 return@launch
             }
 
-            redisLocks.setLock(msg.sessionId, "1", ttlSeconds = 180)
+            redisLocks.setLock(msg.sessionId, "1", ttlSeconds = opencodeProps.lockTtlSeconds())
             try {
-                val ocResponse = serverAgent.run(msg.thread)
+                // always reply - the completion message also releases the Slack thread lock
+                val ocResponse = try {
+                    serverAgent.run(msg.thread)
+                } catch (ex: CancellationException) {
+                    throw ex
+                } catch (ex: Exception) {
+                    log.error("Agent run for session {} has failed unexpectedly", msg.sessionId, ex)
+                    OcAgentResponse(
+                        response = UNEXPECTED_FAILURE_RESPONSE,
+                        cost = BigDecimal.ZERO,
+                        toolsInvocations = 0,
+                        duration = Duration.ZERO
+                    )
+                }
 
                 redisStreamPublisher.publish(
                     OpenCodeSessionCompletedListener.OPENCODE_SESSION_COMPLETED_STREAM,

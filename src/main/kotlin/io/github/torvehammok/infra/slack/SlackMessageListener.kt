@@ -2,7 +2,9 @@ package io.github.torvehammok.infra.slack
 
 import io.github.ktor_batterypack.redis.RedisStreamListener
 import io.github.ktor_batterypack.redis.RedisStreamPublisher
+import io.github.torvehammok.domain.OpenCodeProps
 import io.github.torvehammok.domain.SlackThreadService
+import io.github.torvehammok.domain.lockTtlSeconds
 import io.github.torvehammok.infra.opencode.OpenCodeMessageListener.Companion.OPENCODE_MESSAGES_STREAM
 import io.github.torvehammok.infra.opencode.OpenCodeRedisMessage
 import io.github.torvehammok.libs.RedisLocks
@@ -25,7 +27,8 @@ class SlackMessageListener(
     private val jsonMapper: JsonMapper,
     private val redisLocks: RedisLocks,
     private val redisStreamPublisher: RedisStreamPublisher,
-    private val statefulRedisConnection: StatefulRedisConnection<String, String>
+    private val statefulRedisConnection: StatefulRedisConnection<String, String>,
+    private val opencodeProps: OpenCodeProps
 ) : RedisStreamListener {
 
     private val scope = CoroutineScope(Dispatchers.Default + CoroutineName("SlackMessageListener"))
@@ -52,7 +55,7 @@ class SlackMessageListener(
 
             val thread = threadService.readThread(threadTs = threadTs, channel = channel)
 
-            redisLocks.setLock(channel, threadTs, ttlSeconds = 180)
+            redisLocks.setLock(channel, threadTs, ttlSeconds = opencodeProps.lockTtlSeconds())
             threadService.setThinkingStatus(threadTs, msg.ts, channel)
 
             val sessionId = UUID.randomUUID().toString()

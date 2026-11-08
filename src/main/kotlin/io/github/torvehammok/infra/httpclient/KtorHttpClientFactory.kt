@@ -15,7 +15,6 @@ import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.SerializationFeature
 import tools.jackson.databind.cfg.DateTimeFeature
 import tools.jackson.module.kotlin.KotlinModule
-import kotlin.time.Duration.Companion.seconds
 
 @Singleton
 class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
@@ -28,8 +27,8 @@ class KtorHttpClientFactory(private val meterRegistry: MeterRegistry) {
         expectSuccess = false
 
         install(SSE) {
-            maxReconnectionAttempts = 5
-            reconnectionTime = 3.seconds
+            // reconnects are handled by callers - a silent reconnect would hide events lost while disconnected
+            maxReconnectionAttempts = 0
         }
 
         install(ContentNegotiation) {

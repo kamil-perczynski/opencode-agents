@@ -34,6 +34,13 @@ data class OpenCodeProps(
     """.trimIndent(),
     @param:JsonPropertyDescription("Maximum agent session duration in seconds")
     val maxAgentSessionDurationSeconds: Long = 180,
+    @param:JsonPropertyDescription("Stalled session detection and opencode server supervision")
+    val watchdog: OpenCodeWatchdogProps = OpenCodeWatchdogProps(),
     @param:JsonPropertyDescription("Configuration synchronization")
     val configSync: ConfigSyncProps = ConfigSyncProps()
 )
+
+/**
+ * Thread lock TTL - must outlive the longest agent session, so a second message cannot start a parallel run.
+ */
+fun OpenCodeProps.lockTtlSeconds(): Long = maxAgentSessionDurationSeconds + 30

@@ -4,6 +4,11 @@ permissions:
   id-token: write
   contents: read
 
+# Explicit bash adds -o pipefail, so a failing command piped into awk still fails its step
+defaults:
+  run:
+    shell: bash
+
 # Runs when an issue gets the "opencode" label (also when it's created with it). Issue comments never start a run.
 on:
   issues:
@@ -34,7 +39,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-          token: ${{ env.GH_TOKEN }}
+          # opencode sets its own git auth header; stored checkout credentials would send a second one
+          persist-credentials: false
       - name: Open draft pull request
         run: |-
           git config user.name "opencode-agent[bot]"
@@ -42,7 +48,8 @@ jobs:
           git switch -c "$BRANCH"
           # [skip ci] keeps CI from running on the empty draft PR; the real commit below runs it
           git commit --allow-empty -m "opencode: start work on #${ISSUE} [skip ci]"
-          git push -u origin "$BRANCH"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth}" push origin "$BRANCH"
           pr=$(gh pr create --draft --head "$BRANCH" --title "$ISSUE_TITLE" --body "Closes #${ISSUE}")
           gh issue comment "$ISSUE" --body "opencode is working on this in $pr ([run]($RUN_URL))"
           echo "PR_URL=$pr" >> "$GITHUB_ENV"

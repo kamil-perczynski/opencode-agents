@@ -20,7 +20,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
     versionCatalogs {
-        create("ktorLibs").from("io.ktor:ktor-version-catalog:3.4.0")
+        create("ktorLibs").from("io.ktor:ktor-version-catalog:3.6.1")
         create("batterypackLibs").from("io.github.ktor_batterypack:ktor-batterypack-versions-catalog:0.0.13-alpha")
     }
 }

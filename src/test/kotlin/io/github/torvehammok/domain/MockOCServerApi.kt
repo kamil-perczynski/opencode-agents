@@ -93,6 +93,44 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
         )
     }
 
+    fun mockActiveSessions(
+        vararg sessionIds: String,
+        mappingDef: MappingCustomizer = MAPPING_IDENTITY
+    ) {
+        val body = mapOf("data" to sessionIds.associateWith { mapOf("type" to "running") })
+
+        wiremock.stubFor(
+            mappingDef.customize(
+                mapping = get(urlPathEqualTo("/api/session/active"))
+                    .willReturn(
+                        status(200)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody(jsonMapper.writeValueAsString(body))
+                    ),
+                jsonMapper = jsonMapper
+            )
+        )
+    }
+
+    fun mockMessages(
+        sessionId: String,
+        mappingDef: MappingCustomizer = MAPPING_IDENTITY,
+        responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY
+    ) {
+        wiremock.stubFor(
+            mappingDef.customize(
+                mapping = get(urlPathEqualTo("/api/session/${sessionId}/message"))
+                    .willReturn(
+                        responseDef.customize(
+                            responseDef = status(200).withHeader("Content-Type", "application/json"),
+                            jsonMapper = jsonMapper
+                        )
+                    ),
+                jsonMapper = jsonMapper
+            )
+        )
+    }
+
     fun mockHealthcheck(
         mappingDef: MappingCustomizer = MAPPING_IDENTITY,
         responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY

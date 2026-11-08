@@ -17,14 +17,19 @@ class OpenCodeServerModule {
     @Singleton(binds = [InitCallback::class, AutoCloseable::class])
     fun openCodeServerManager(
         @Provided opencodeProps: OpenCodeProps,
-        @Provided sshGitConfigFetcher: SSHGitConfigFetcher
+        @Provided sshGitConfigFetcher: SSHGitConfigFetcher,
+        @Provided openCodeHealth: OpenCodeHealth,
+        @Provided openCodeClient: OpenCodeClient
     ): OpenCodeServerManager {
-        return OpenCodeServerManager(opencodeProps, sshGitConfigFetcher)
+        return OpenCodeServerManager(opencodeProps, sshGitConfigFetcher, openCodeHealth, openCodeClient)
     }
 
     @Singleton(binds = [ReadinessCheck::class])
-    fun readinessCheck(@Provided openCodeClient: OpenCodeClient): OpenCodeReadinessCheck {
-        return OpenCodeReadinessCheck(openCodeClient)
+    fun readinessCheck(
+        @Provided openCodeClient: OpenCodeClient,
+        @Provided openCodeHealth: OpenCodeHealth
+    ): OpenCodeReadinessCheck {
+        return OpenCodeReadinessCheck(openCodeClient, openCodeHealth)
     }
 
     @Singleton

@@ -11,6 +11,7 @@ import io.github.ktor_batterypack.redis.RedisStreamPublisher
 import io.github.torvehammok.controllers.HttpSlackEventsController
 import io.github.torvehammok.controllers.SlackAppMentionController
 import io.github.torvehammok.controllers.SlackChannelController
+import io.github.torvehammok.domain.OpenCodeProps
 import io.github.torvehammok.domain.SlackThreadService
 import io.github.torvehammok.infra.ConfigMap
 import io.github.torvehammok.domain.SlackProps
@@ -113,14 +114,16 @@ class SlackModule {
         @Provided jsonMapper: JsonMapper,
         @Provided redisLocks: RedisLocks,
         redisStreamPublisher: RedisStreamPublisher,
-        statefulRedisConnection: StatefulRedisConnection<String, String>
+        statefulRedisConnection: StatefulRedisConnection<String, String>,
+        @Provided opencodeProps: OpenCodeProps
     ): SlackMessageListener {
         return SlackMessageListener(
             threadService,
             jsonMapper,
             redisLocks,
             redisStreamPublisher,
-            statefulRedisConnection
+            statefulRedisConnection,
+            opencodeProps
         )
     }
 

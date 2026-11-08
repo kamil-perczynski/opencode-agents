@@ -12,3 +12,12 @@ opencode:
   server:
     enabled: false
   maxAgentSessionDurationSeconds: 2
+  readTimeoutMs: 500
+  watchdog:
+    eventStreamConnectTimeoutMs: 1000
+    inactivityTimeoutMs: 600
+    checkIntervalMs: 100
+    heartbeatTimeoutMs: 400
+    maxReconnectAttempts: 2
+    reconnectBackoffMs: 50
+    reconnectBackoffMaxMs: 100

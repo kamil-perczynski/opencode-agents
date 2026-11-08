@@ -9,6 +9,7 @@ import io.ktor.client.call.*
 import io.ktor.client.plugins.sse.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.cancellable
@@ -31,13 +32,17 @@ class OpenCodeClient(
 
     /**
      * Subscribes to the global (volatile) event bus. [onConnected] is invoked once the server
-     * acknowledges the subscription - events published before that moment are not delivered.
+     * acknowledges the subscription - events published before that moment (or while disconnected) are not delivered.
+     * [onHeartbeat] is invoked for server heartbeats (SSE comments), which prove the connection is alive.
+     *
+     * Returns when the server closes the stream - it does not mean the session has finished.
      */
     suspend fun subscribeSessionEvents(
         sessionId: String,
         onConnected: () -> Unit = {},
+        onHeartbeat: () -> Unit = {},
         onEvent: (event: OCEvent) -> Unit
-    ) {
+    ) = withClientErrors("subscribe to opencode events") {
         httpClient.sse(
             urlString = "/api/event",
             request = {
@@ -45,12 +50,16 @@ class OpenCodeClient(
                 opencodeAuth(opencodeProps)
                 header(HttpHeaders.Accept, ContentType.Text.EventStream)
             },
+            showCommentEvents = true
         ) {
             incoming.cancellable().collect { serverEvent ->
                 currentCoroutineContext().ensureActive()
 
                 val data = serverEvent.data
                 if (data.isNullOrBlank()) {
+                    if (serverEvent.comments != null) {
+                        onHeartbeat()
+                    }
                     return@collect
                 }
 
@@ -65,7 +74,7 @@ class OpenCodeClient(
         }
     }
 
-    suspend fun createSession(agent: String, modelId: String): String {
+    suspend fun createSession(agent: String, modelId: String): String = withClientErrors("open new session") {
         val response = httpClient.post {
             pathPattern("/api/session")
             url("/api/session")
@@ -84,10 +93,10 @@ class OpenCodeClient(
 
         val body = response.body<OCData<OCSession>>()
 
-        return body.data.id
+        body.data.id
     }
 
-    suspend fun prompt(sessionId: String, prompt: String) {
+    suspend fun prompt(sessionId: String, prompt: String) = withClientErrors("prompt session") {
         val response = httpClient.post {
             url("/api/session/$sessionId/prompt")
             pathPattern("/api/session/{sessionId}/prompt")
@@ -101,7 +110,7 @@ class OpenCodeClient(
         }
     }
 
-    suspend fun interrupt(sessionId: String) {
+    suspend fun interrupt(sessionId: String) = withClientErrors("interrupt session") {
         val response = httpClient.post {
             url("/api/session/$sessionId/interrupt")
             pathPattern("/api/session/{sessionId}/interrupt")
@@ -111,6 +120,40 @@ class OpenCodeClient(
         if (!response.status.isSuccess()) {
             throw OpenCodeClientException("Failed to interrupt session")
         }
+    }
+
+    /**
+     * Ids of sessions with an execution currently running on the server - absent sessions are idle.
+     */
+    suspend fun fetchActiveSessionIds(): Set<String> = withClientErrors("fetch active sessions") {
+        val response = httpClient.get {
+            url("/api/session/active")
+            pathPattern("/api/session/active")
+            opencodeAuth(opencodeProps)
+        }
+
+        if (!response.status.isSuccess()) {
+            throw OpenCodeClientException("Failed to fetch active sessions")
+        }
+
+        response.body<OCData<Map<String, Any?>>>().data.keys
+    }
+
+    /**
+     * Session messages, newest first.
+     */
+    suspend fun fetchMessages(sessionId: String): List<OCSessionMessage> = withClientErrors("fetch session messages") {
+        val response = httpClient.get {
+            url("/api/session/$sessionId/message")
+            pathPattern("/api/session/{sessionId}/message")
+            opencodeAuth(opencodeProps)
+        }
+
+        if (!response.status.isSuccess()) {
+            throw OpenCodeClientException("Failed to fetch session messages")
+        }
+
+        response.body<OCData<List<OCSessionMessage>>>().data
     }
 
     suspend fun fetchHealthcheckStatus(): HttpStatusCode {
@@ -124,6 +167,22 @@ class OpenCodeClient(
         return response.status
     }
 
+}
+
+/**
+ * Transport failures (timeouts, refused connections, broken streams) surface as [OpenCodeClientException],
+ * so callers handle every opencode failure in one place.
+ */
+private suspend fun <T> withClientErrors(action: String, block: suspend () -> T): T {
+    try {
+        return block()
+    } catch (ex: OpenCodeClientException) {
+        throw ex
+    } catch (ex: CancellationException) {
+        throw ex
+    } catch (ex: Exception) {
+        throw OpenCodeClientException("Failed to $action: ${ex.message}", ex)
+    }
 }
 
 private fun toModelRef(modelId: String): OCModelRef {

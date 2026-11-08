@@ -4,7 +4,7 @@ permissions:
   id-token: write
   contents: read
 
-# Explicit bash adds -o pipefail, so a failing command piped into awk still fails its step
+# Explicit bash adds -o pipefail, so a failing opencode piped into awk still fails its step
 defaults:
   run:
     shell: bash
@@ -20,52 +20,66 @@ jobs:
     if: github.event.label.name == 'opencode'
     runs-on: ubuntu-26.04
     env:
-      GH_REPO: ${{ github.repository }}
-      ISSUE: ${{ github.event.issue.number }}
-      ISSUE_TITLE: ${{ github.event.issue.title }}
       BRANCH: opencode/issue-${{ github.event.issue.number }}-${{ github.run_id }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       # Same exchange opencode github run does: the run's OIDC token for an opencode app installation token,
-      # so the PR and pushes come from the app and still trigger CI
+      # so the PR and commits come from the app and still trigger CI
       - name: Get opencode app token
-        run: |-
-          oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=opencode-github-action" | jq -r .value)
-          token=$(curl -sSf -X POST -H "Authorization: Bearer $oidc" \
-            https://api.opencode.ai/exchange_github_app_token | jq -r .token)
-          echo "::add-mask::$token"
-          echo "GH_TOKEN=$token" >> "$GITHUB_ENV"
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const oidc = await core.getIDToken('opencode-github-action')
+            const res = await fetch('https://api.opencode.ai/exchange_github_app_token', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${oidc}` },
+            })
+            if (!res.ok) throw new Error(`App token exchange failed: ${res.status} ${await res.text()}`)
+            const { token } = await res.json()
+            core.setSecret(token)
+            core.exportVariable('APP_TOKEN', token)
+      # Opens the draft PR on an empty "[skip ci]" commit, so CI doesn't run until opencode pushes real changes.
+      # Also writes the pull_request event opencode github run reads: given one, it works on that PR's branch
+      - name: Open draft pull request
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ env.APP_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo
+            const { issue, repository, sender } = context.payload
+            const base = repository.default_branch
+            const branch = process.env.BRANCH
+
+            const { data: head } = await github.rest.repos.getBranch({ owner, repo, branch: base })
+            const { data: commit } = await github.rest.git.createCommit({
+              owner, repo,
+              message: `opencode: start work on #${issue.number} [skip ci]`,
+              tree: head.commit.commit.tree.sha,
+              parents: [head.commit.sha],
+            })
+            await github.rest.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: commit.sha })
+            const { data: pr } = await github.rest.pulls.create({
+              owner, repo, base, head: branch, draft: true, title: issue.title, body: `Closes #${issue.number}`,
+            })
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issue.number,
+              body: `opencode is working on this in ${pr.html_url} ([run](${process.env.RUN_URL}))`,
+            })
+
+            const event = { action: 'opened', number: pr.number, pull_request: pr, repository, sender }
+            require('fs').writeFileSync(`${process.env.RUNNER_TEMP}/pr-event.json`, JSON.stringify(event))
+            core.exportVariable('PR_NUMBER', pr.number)
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
           # opencode sets its own git auth header; stored checkout credentials would send a second one
           persist-credentials: false
-      - name: Open draft pull request
-        run: |-
-          git config user.name "opencode-agent[bot]"
-          git config user.email "opencode-agent[bot]@users.noreply.github.com"
-          git switch -c "$BRANCH"
-          # [skip ci] keeps CI from running on the empty draft PR; the real commit below runs it
-          git commit --allow-empty -m "opencode: start work on #${ISSUE} [skip ci]"
-          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth}" push origin "$BRANCH"
-          pr=$(gh pr create --draft --head "$BRANCH" --title "$ISSUE_TITLE" --body "Closes #${ISSUE}")
-          gh issue comment "$ISSUE" --body "opencode is working on this in $pr ([run]($RUN_URL))"
-          echo "PR_URL=$pr" >> "$GITHUB_ENV"
       - name: Install opencode
         run: |-
           curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-      # opencode github run picks its behaviour from the triggering event. Hand it a pull_request event for the
-      # draft PR, so it works on that branch: commits, pushes and comments its answer on the PR
-      - name: Prepare pull_request event
-        run: |-
-          gh api "repos/${GH_REPO}/pulls/${PR_URL##*/}" |
-            jq '{action: "opened", number, pull_request: ., repository: .base.repo, sender: .user}' > "$RUNNER_TEMP/pr-event.json"
       - name: Run opencode
         env:
-          GH_TOKEN: ""
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           MODEL: opencode-go/deepseek-v4.1-flash
           PROMPT: |-
@@ -77,10 +91,27 @@ jobs:
           GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$RUNNER_TEMP/pr-event.json" opencode github run 2>&1 |
             awk -f .github/opencode-log-filter.awk
       - name: Mark ready for review
-        run: |-
-          if [ "$(gh pr view "$PR_URL" --json commits --jq '.commits | length')" -gt 1 ]; then
-            gh pr ready "$PR_URL"
-          fi
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ env.APP_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: Number(process.env.PR_NUMBER) })
+            // Only the empty "[skip ci]" commit means opencode changed nothing; leave the PR as a draft then
+            if (pr.commits > 1) {
+              await github.graphql(
+                'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId } }',
+                { id: pr.node_id },
+              )
+            }
       - name: Report failure
-        if: failure() && env.PR_URL != ''
-        run: gh pr comment "$PR_URL" --body "opencode failed, see the [run]($RUN_URL)"
+        if: failure() && env.PR_NUMBER != ''
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ env.APP_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: Number(process.env.PR_NUMBER),
+              body: `opencode failed, see the [run](${process.env.RUN_URL})`,
+            })

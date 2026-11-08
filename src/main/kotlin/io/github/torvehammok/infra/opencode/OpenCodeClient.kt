@@ -96,7 +96,10 @@ class OpenCodeClient(
         body.data.id
     }
 
-    suspend fun prompt(sessionId: String, prompt: String) = withClientErrors("prompt session") {
+    /**
+     * @return id of the user message created by the prompt, null if the server did not return it
+     */
+    suspend fun prompt(sessionId: String, prompt: String): String? = withClientErrors("prompt session") {
         val response = httpClient.post {
             url("/api/session/$sessionId/prompt")
             pathPattern("/api/session/{sessionId}/prompt")
@@ -105,9 +108,15 @@ class OpenCodeClient(
             setBody(jsonMapper.writeValueAsString(OCPromptRequest(text = prompt)))
         }
 
+        if (response.status == HttpStatusCode.NotFound) {
+            throw OpenCodeSessionNotFoundException(sessionId)
+        }
+
         if (!response.status.isSuccess()) {
             throw OpenCodeClientException("Failed to prompt session")
         }
+
+        response.body<OCPromptResponse>().data?.id
     }
 
     suspend fun interrupt(sessionId: String) = withClientErrors("interrupt session") {

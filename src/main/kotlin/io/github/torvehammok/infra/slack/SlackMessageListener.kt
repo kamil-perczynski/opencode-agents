@@ -48,14 +48,19 @@ class SlackMessageListener(
             val threadTs = msg.threadTs ?: msg.ts
             val channel = msg.channelId
 
-            if (redisLocks.isLocked(channel, threadTs)) {
+            // the thread shares one opencode session - concurrent prompts would steer each other
+            if (!redisLocks.tryLock(channel, threadTs, ttlSeconds = lockTtlSeconds(opencodeProps))) {
                 log.info("Thread {} in channel {} is already being processed. Skipping.", threadTs, channel)
                 return@launch
             }
 
-            val thread = threadService.readThread(threadTs = threadTs, channel = channel)
+            val thread = try {
+                threadService.readThread(threadTs = threadTs, channel = channel)
+            } catch (ex: Exception) {
+                redisLocks.releaseLock(channel, threadTs)
+                throw ex
+            }
 
-            redisLocks.setLock(channel, threadTs, ttlSeconds = opencodeProps.lockTtlSeconds())
             threadService.setThinkingStatus(threadTs, msg.ts, channel)
 
             val sessionId = UUID.randomUUID().toString()

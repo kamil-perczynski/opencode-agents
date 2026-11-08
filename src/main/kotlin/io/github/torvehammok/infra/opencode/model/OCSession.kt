@@ -34,6 +34,19 @@ data class OCPromptRequest(
 )
 
 /**
+ * Response of `POST /api/session/{sessionID}/prompt` - the created user message.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCPromptResponse(
+    val data: OCPromptMessage? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCPromptMessage(
+    val id: String? = null
+)
+
+/**
  * Entry of `GET /api/session/{sessionID}/message`, e.g. `user`, `assistant` or `idle` (end of an execution).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

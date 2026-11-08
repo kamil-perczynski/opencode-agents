@@ -2,7 +2,7 @@
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS opencode
 
 ARG TARGETARCH
-ARG OPENCODE_VERSION=2.0.31
+ARG OPENCODE_VERSION=2.2.6
 
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) \
     && wget -qO- "https://registry.npmjs.org/@opencode/cli-linux-${ARCH}-musl/-/cli-linux-${ARCH}-musl-${OPENCODE_VERSION}.tgz" \

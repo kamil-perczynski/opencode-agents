@@ -2,6 +2,7 @@ package io.github.torvehammok.domain
 
 import io.github.torvehammok.infra.opencode.OpenCodeClientException
 import io.github.torvehammok.infra.opencode.model.OCEvent
+import io.github.torvehammok.infra.opencode.model.OCTokenUsage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import org.slf4j.LoggerFactory
@@ -14,6 +15,16 @@ import java.util.concurrent.ConcurrentHashMap
 private val log = LoggerFactory.getLogger(SessionTurn::class.java)
 
 internal val COST_CONTEXT = MathContext(4, RoundingMode.HALF_UP)
+
+private fun toTokenUsage(tokens: OCTokenUsage): TokenUsage {
+    return TokenUsage(
+        input = tokens.input,
+        output = tokens.output,
+        reasoning = tokens.reasoning,
+        cacheRead = tokens.cache?.read ?: 0,
+        cacheWrite = tokens.cache?.write ?: 0
+    )
+}
 
 internal sealed interface TurnOutcome {
     data class Succeeded(val text: String) : TurnOutcome
@@ -29,7 +40,9 @@ internal class SessionTurn(
     /** session cost before this turn - opencode reports a running total of the whole session */
     private val baseCost: BigDecimal = BigDecimal.ZERO,
     /** session kept from a previous turn of the thread */
-    val reused: Boolean = false
+    val reused: Boolean = false,
+    /** list price of the session model, to estimate the cost when the provider reports none */
+    private val pricing: ModelPricing? = null
 ) {
 
     /** running cost of the whole session */
@@ -101,6 +114,20 @@ internal class SessionTurn(
 
     fun turnCost(): BigDecimal = (cost - baseCost).max(BigDecimal.ZERO)
 
+    /**
+     * Since opencode 2.2 the cost is the one reported by the provider - subscription plans (e.g. OpenCode Go)
+     * report 0, then the cost is estimated from the tokens at list price.
+     */
+    private fun sessionCost(reported: Double?, tokens: OCTokenUsage?): BigDecimal? {
+        if (reported != null && reported > 0) {
+            return BigDecimal(reported, COST_CONTEXT)
+        }
+        if (pricing != null && tokens != null) {
+            return pricing.costOf(toTokenUsage(tokens)).round(COST_CONTEXT)
+        }
+        return reported?.let { BigDecimal(it, COST_CONTEXT) }
+    }
+
     fun handle(event: OCEvent) {
         MDC.put("sessionId", sessionId)
         lastProgressAt = System.currentTimeMillis()
@@ -148,12 +175,8 @@ internal class SessionTurn(
                 lastText = data?.text
             }
 
-            "session.usage.updated" -> {
-                // running total of the whole session
-                if (data?.cost != null) {
-                    cost = BigDecimal(data.cost, COST_CONTEXT)
-                }
-            }
+            // running totals of the whole session
+            "session.usage.updated" -> cost = sessionCost(data?.cost, data?.tokens) ?: cost
 
             "session.step.failed" -> log.warn("opencode> step failed: {}", data?.error?.message)
 

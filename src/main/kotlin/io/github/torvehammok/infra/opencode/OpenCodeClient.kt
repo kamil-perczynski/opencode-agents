@@ -149,6 +149,23 @@ class OpenCodeClient(
     }
 
     /**
+     * Models available on the server, with their list prices.
+     */
+    suspend fun fetchModels(): List<OCModelInfo> = withClientErrors("fetch models") {
+        val response = httpClient.get {
+            url("/api/model")
+            pathPattern("/api/model")
+            opencodeAuth(opencodeProps)
+        }
+
+        if (!response.status.isSuccess()) {
+            throw OpenCodeClientException("Failed to fetch models")
+        }
+
+        response.body<OCData<List<OCModelInfo>>>().data
+    }
+
+    /**
      * Session messages, newest first.
      */
     suspend fun fetchMessages(sessionId: String): List<OCSessionMessage> = withClientErrors("fetch session messages") {

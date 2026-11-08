@@ -131,6 +131,24 @@ class MockOCServerApi(private val wiremock: WireMockServer, private val jsonMapp
         )
     }
 
+    fun mockModels(
+        mappingDef: MappingCustomizer = MAPPING_IDENTITY,
+        responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY
+    ) {
+        wiremock.stubFor(
+            mappingDef.customize(
+                mapping = get(urlPathEqualTo("/api/model"))
+                    .willReturn(
+                        responseDef.customize(
+                            responseDef = status(200).withHeader("Content-Type", "application/json"),
+                            jsonMapper = jsonMapper
+                        )
+                    ),
+                jsonMapper = jsonMapper
+            )
+        )
+    }
+
     fun mockHealthcheck(
         mappingDef: MappingCustomizer = MAPPING_IDENTITY,
         responseDef: ResponseCustomizer = RESPONSE_DEF_IDENTITY

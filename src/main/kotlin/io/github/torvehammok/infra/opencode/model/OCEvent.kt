@@ -23,7 +23,25 @@ data class OCEventData(
     val cost: Double? = null,
     val error: OCStructuredError? = null,
     val reason: String? = null,
-    val input: Map<String, Any?>? = null
+    val input: Map<String, Any?>? = null,
+    val tokens: OCTokenUsage? = null
+)
+
+/**
+ * Tokens of `session.usage.updated` - running totals of the whole session.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCTokenUsage(
+    val input: Long = 0,
+    val output: Long = 0,
+    val reasoning: Long = 0,
+    val cache: OCTokenCacheUsage? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class OCTokenCacheUsage(
+    val read: Long = 0,
+    val write: Long = 0
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

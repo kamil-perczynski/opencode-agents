@@ -10,9 +10,10 @@ on:
 jobs:
   apply:
     name: Apply changes
-    # Only comments that start with the mention, so opencode's own replies can't re-trigger it
+    # opencode ends every reply with a "[github run](...)" footer; skip those so its own replies can't re-trigger it
     if: >-
-      (startsWith(github.event.comment.body, '/oc') || startsWith(github.event.comment.body, '/opencode')) &&
+      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
+      !contains(github.event.comment.body, '[github run](') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-26.04
     steps:

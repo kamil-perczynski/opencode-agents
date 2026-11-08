@@ -11,8 +11,10 @@ on:
 jobs:
   apply:
     name: Apply changes
-    # opencode ends every reply with a "[github run](...)" footer; skip those so its own replies can't re-trigger it
+    # Only issues labeled "opencode". opencode ends every reply with a "[github run](...)" footer;
+    # skip those so its own replies can't re-trigger it
     if: >-
+      contains(github.event.issue.labels.*.name, 'opencode') &&
       (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
       !contains(github.event.comment.body, '[github run](') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)

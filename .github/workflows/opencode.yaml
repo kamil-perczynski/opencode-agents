@@ -1,0 +1,37 @@
+name: opencode
+
+permissions:
+  contents: read
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  apply:
+    name: Apply changes
+    # Only comments that start with the mention, so opencode's own replies can't re-trigger it
+    if: >-
+      (startsWith(github.event.comment.body, '/oc') || startsWith(github.event.comment.body, '/opencode')) &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.OPENCODE_GITHUB_PAT }}
+      - name: Configure git user
+        env:
+          GH_TOKEN: ${{ secrets.OPENCODE_GITHUB_PAT }}
+        run: |-
+          login=$(gh api user --jq .login)
+          id=$(gh api user --jq .id)
+          git config --global user.name "${login}"
+          git config --global user.email "${id}+${login}@users.noreply.github.com"
+      - uses: anomalyco/opencode/github@v1.19.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.OPENCODE_GITHUB_PAT }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode-go/deepseek-v4.1-flash
+          use_github_token: true

@@ -4,34 +4,73 @@ permissions:
   id-token: write
   contents: read
 
+# Runs when an issue gets the "opencode" label (also when it's created with it). Issue comments never start a run.
 on:
-  issue_comment:
-    types: [created]
+  issues:
+    types: [labeled]
 
 jobs:
   apply:
-    name: Apply changes
-    # Only issues labeled "opencode". opencode ends every reply with a "[github run](...)" footer;
-    # skip those so its own replies can't re-trigger it
-    if: >-
-      contains(github.event.issue.labels.*.name, 'opencode') &&
-      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
-      !contains(github.event.comment.body, '[github run](') &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    name: Implement issue
+    if: github.event.label.name == 'opencode'
     runs-on: ubuntu-26.04
+    env:
+      GH_REPO: ${{ github.repository }}
+      ISSUE: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      BRANCH: opencode/issue-${{ github.event.issue.number }}-${{ github.run_id }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      # Same exchange opencode github run does: the run's OIDC token for an opencode app installation token,
+      # so the PR and pushes come from the app and still trigger CI
+      - name: Get opencode app token
+        run: |-
+          oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=opencode-github-action" | jq -r .value)
+          token=$(curl -sSf -X POST -H "Authorization: Bearer $oidc" \
+            https://api.opencode.ai/exchange_github_app_token | jq -r .token)
+          echo "::add-mask::$token"
+          echo "GH_TOKEN=$token" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
-          persist-credentials: false
-      # Same steps as anomalyco/opencode/github, run inline so the output can be filtered
+          token: ${{ env.GH_TOKEN }}
+      - name: Open draft pull request
+        run: |-
+          git config user.name "opencode-agent[bot]"
+          git config user.email "opencode-agent[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit --allow-empty -m "opencode: start work on #${ISSUE}"
+          git push -u origin "$BRANCH"
+          pr=$(gh pr create --draft --head "$BRANCH" --title "$ISSUE_TITLE" --body "Closes #${ISSUE}")
+          gh issue comment "$ISSUE" --body "opencode is working on this in $pr ([run]($RUN_URL))"
+          echo "PR_URL=$pr" >> "$GITHUB_ENV"
       - name: Install opencode
         run: |-
           curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
       - name: Run opencode
-        # No GitHub token: opencode swaps the run's OIDC token for an opencode app installation token
         env:
+          GH_TOKEN: ""
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          MODEL: opencode-go/deepseek-v4.1-flash
-        run: opencode github run 2>&1 | awk -f .github/opencode-log-filter.awk
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |-
+          prompt="Implement GitHub issue #${ISSUE}: ${ISSUE_TITLE}
+
+          ${ISSUE_BODY}
+
+          Make the changes in this repository. Don't commit, push or open pull requests; that is done for you."
+          opencode run --auto --model opencode-go/deepseek-v4.1-flash "$prompt" 2>&1 | awk -f .github/opencode-log-filter.awk
+      - name: Push changes
+        run: |-
+          git add -A
+          if git diff --cached --quiet; then
+            gh pr comment "$PR_URL" --body "opencode finished without changes ([run]($RUN_URL))"
+          else
+            git commit -m "opencode: implement #${ISSUE}"
+            git push
+            gh pr ready "$PR_URL"
+          fi
+      - name: Report failure
+        if: failure() && env.PR_URL != ''
+        run: gh pr comment "$PR_URL" --body "opencode failed, see the [run]($RUN_URL)"

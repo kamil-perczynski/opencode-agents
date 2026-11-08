@@ -74,6 +74,20 @@ jobs:
           fetch-depth: 1
           # opencode sets its own git auth header; stored checkout credentials would send a second one
           persist-credentials: false
+      # Same Java and Gradle setup as cicd.yaml, so opencode can build and test its changes
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
+          # Reuse the cache CI saves on main; issue-triggered runs only get read access to the Actions cache
+          cache-read-only: true
       - name: Install opencode
         run: |-
           curl -fsSL https://opencode.ai/install | bash -s -- --version 1.19.5

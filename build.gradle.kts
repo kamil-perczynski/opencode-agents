@@ -8,6 +8,7 @@ group = "io.github.torvehammok"
 version = "1.0-SNAPSHOT"
 
 dependencies {
+    implementation(platform(ktorLibs.bom))
     implementation(batterypackLibs.dotenv.kotlin)
     ksp(batterypackLibs.ktor.batterypack.validation.ksp)
 
@@ -33,6 +34,7 @@ dependencies {
     implementation(libs.janino)
 
     testImplementation(kotlin("test"))
+    testImplementation(platform(ktorLibs.bom))
     testImplementation(platform(batterypackLibs.junit.bom))
     testImplementation(batterypackLibs.ktor.batterypack.redis.testing)
     testImplementation(batterypackLibs.junit.jupiter)

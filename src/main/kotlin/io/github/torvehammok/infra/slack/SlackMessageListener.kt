@@ -48,35 +48,45 @@ class SlackMessageListener(
             val threadTs = msg.threadTs ?: msg.ts
             val channel = msg.channelId
 
+            val lockOwner = UUID.randomUUID().toString()
+
             // the thread shares one opencode session - concurrent prompts would steer each other
-            if (!redisLocks.tryLock(channel, threadTs, ttlSeconds = lockTtlSeconds(opencodeProps))) {
+            if (!redisLocks.tryLock(channel, threadTs, ttlSeconds = lockTtlSeconds(opencodeProps), owner = lockOwner)) {
                 log.info("Thread {} in channel {} is already being processed. Skipping.", threadTs, channel)
                 return@launch
             }
 
-            val thread = try {
-                threadService.readThread(threadTs = threadTs, channel = channel)
+            try {
+                val thread = threadService.readThread(threadTs = threadTs, channel = channel)
+
+                threadService.setThinkingStatus(threadTs, msg.ts, channel)
+
+                val sessionId = UUID.randomUUID().toString()
+                statefulRedisConnection.coroutines().hmset(
+                    "opencode_session:${sessionId}",
+                    mapOf("threadTs" to threadTs, "channelId" to channel, "lockOwner" to lockOwner),
+                )
+                statefulRedisConnection.coroutines().expire(
+                    "opencode_session:${sessionId}",
+                    lockTtlSeconds(opencodeProps) * 2,
+                )
+
+                redisStreamPublisher.publish(
+                    OPENCODE_MESSAGES_STREAM,
+                    OpenCodeRedisMessage(
+                        sessionId = sessionId,
+                        text = msg.text,
+                        thread = thread
+                    )
+                )
             } catch (ex: Exception) {
-                redisLocks.releaseLock(channel, threadTs)
+                try {
+                    redisLocks.releaseLock(channel, threadTs, lockOwner)
+                } catch (releaseEx: Exception) {
+                    log.warn("Failed to release lock for thread {} in channel {}", threadTs, channel, releaseEx)
+                }
                 throw ex
             }
-
-            threadService.setThinkingStatus(threadTs, msg.ts, channel)
-
-            val sessionId = UUID.randomUUID().toString()
-            statefulRedisConnection.coroutines().hmset(
-                "opencode_session:${sessionId}",
-                mapOf("threadTs" to threadTs, "channelId" to channel),
-            )
-
-            redisStreamPublisher.publish(
-                OPENCODE_MESSAGES_STREAM,
-                OpenCodeRedisMessage(
-                    sessionId = sessionId,
-                    text = msg.text,
-                    thread = thread
-                )
-            )
         }
     }
 }

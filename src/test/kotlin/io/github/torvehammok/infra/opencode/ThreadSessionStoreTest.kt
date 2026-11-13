@@ -66,4 +66,25 @@ class ThreadSessionStoreTest : OpenCodeAgentsIT() {
         redisLocks.releaseLock(channelId, "1.0")
         assertThat(redisLocks.tryLock(channelId, "1.0", ttlSeconds = 60)).isTrue
     }
+
+    @Test
+    fun testStaleOwnerCannotReleaseLock(): Unit = runBlocking {
+        // given:
+        val channelId = "C${UUID.randomUUID()}"
+
+        // and:
+        assertThat(redisLocks.tryLock(channelId, "1.0", ttlSeconds = 60, owner = "A")).isTrue
+
+        // when: a stale owner tries to release
+        redisLocks.releaseLock(channelId, "1.0", owner = "B")
+
+        // then: the lock is still held
+        assertThat(redisLocks.isLocked(channelId, "1.0")).isTrue
+
+        // when: the real owner releases
+        redisLocks.releaseLock(channelId, "1.0", owner = "A")
+
+        // then: the lock is gone
+        assertThat(redisLocks.isLocked(channelId, "1.0")).isFalse
+    }
 }

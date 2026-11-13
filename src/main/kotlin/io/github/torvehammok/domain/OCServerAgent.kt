@@ -90,7 +90,13 @@ class OCServerAgent(
                         turn.sessionId, outcome.silentForMs, turn.lastEventType, turn.inFlightTools()
                     )
                     interruptQuietly(turn.sessionId)
-                    openCodeHealth.reportStall(turn.sessionId)
+                    delay(watchdogProps.checkIntervalMs)
+                    val stillActive = fetchActiveSessionIdsOrNull()?.contains(turn.sessionId)
+                    if (stillActive == true) {
+                        openCodeHealth.reportStall(turn.sessionId)
+                    } else {
+                        log.warn("Session {} is no longer active after interrupt, skipping the server restart", turn.sessionId)
+                    }
                     OcAgentRun(toResponse(turn, STALLED_RESPONSE, t0), session = null)
                 }
             }

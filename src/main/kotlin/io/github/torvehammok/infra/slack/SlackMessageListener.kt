@@ -14,6 +14,7 @@ import io.lettuce.core.api.coroutines
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
@@ -35,6 +36,7 @@ class SlackMessageListener(
 
     companion object {
         const val SLACK_MESSAGES_STREAM = "slack_messages"
+        private const val LOCK_RETRY_INTERVAL_MS = 2_000L
     }
 
     override fun stream(): String = SLACK_MESSAGES_STREAM
@@ -49,9 +51,13 @@ class SlackMessageListener(
             val channel = msg.channelId
 
             // the thread shares one opencode session - concurrent prompts would steer each other
-            if (!redisLocks.tryLock(channel, threadTs, ttlSeconds = lockTtlSeconds(opencodeProps))) {
-                log.info("Thread {} in channel {} is already being processed. Skipping.", threadTs, channel)
-                return@launch
+            val deadline = System.currentTimeMillis() + lockTtlSeconds(opencodeProps) * 1000
+            while (!redisLocks.tryLock(channel, threadTs, ttlSeconds = lockTtlSeconds(opencodeProps))) {
+                if (System.currentTimeMillis() >= deadline) {
+                    log.warn("Thread {} in channel {} stayed locked for {}s, dropping the message", threadTs, channel, lockTtlSeconds(opencodeProps))
+                    return@launch
+                }
+                delay(LOCK_RETRY_INTERVAL_MS)
             }
 
             val thread = try {

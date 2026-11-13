@@ -47,12 +47,13 @@ class OpenCodeSessionCompletedListener(
 
             val threadTs = data["threadTs"]
             val channelId = data["channelId"]
+            val lockOwner = data["lockOwner"]
 
-            if (threadTs == null || channelId == null) {
-                log.error("Missing threadTs or channelId for sessionId {}", msg.sessionId)
+            if (threadTs == null || channelId == null || lockOwner == null) {
+                log.error("Missing threadTs, channelId or lockOwner for sessionId {}", msg.sessionId)
                 return@launch
             }
-            redisLocks.releaseLock(channelId, threadTs)
+            redisLocks.releaseLock(channelId, threadTs, lockOwner)
             threadService.postResponse(
                 channel = channelId,
                 threadTs = threadTs,
